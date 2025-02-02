@@ -1,0 +1,5 @@
+api_keys
+**/__pycache__
+*.pickle
+specification/*
+gencode/*

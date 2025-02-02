@@ -1,0 +1,248 @@
+<codegen name="Mistral" language="Python" class="MistralCodegen" model="codestral-latest" temperature="0.06">
+
+ <prompt>
+  <!-- Universal prompt, prepended to all requests. -->
+  You are a code generator. You print code in Python language, as specified by requirements.
+  Print only blocks of code. Do not chat outside code blocks. Do not provide explanations nor usage examples.
+  No comments.
+  Keep identifiers as they are, do not change case or convert to snake case, but append underscore if variable is a reserved word or one of Python standard type names.
+  Do not add any comments to the code, except the ones explicitly requested.
+  Do not number the lines. Do not quote specification in the generated output.
+  Use tabulation character ("\t") for indentation.
+```
+def function():
+	pass
+```
+  Avoid calling the same function twice. Better save result to temporary variable and reuse.
+  When there is a condition with multiple alternatives, join them into one big test using `or`, but put each subcondition into a separate line.
+  Prefer equality operator `==` over `is`. Use `is` only against `None` and `NotImplemented`.
+  If the specification uses variable or argument name `list`, rename it to `list_`.
+  If the specification uses variable or argument name `object`, rename it to `object_`.
+  If the specification uses variable or argument name `input`, rename it to `input_`.
+  If the specification uses variable or argument name `global`, rename it to `global_`.
+  If the specification uses variable or argument name `match`, rename it to `match_`.
+  Do not consult any external resources for code generation. Make code based on the provided specification only.
+ </prompt>
+
+ <prompt context="Prototype">
+  <!-- Prompt to generate a prototype of a function i.e. name with arguments and types. -->
+  Provide a prototype for the provided function description.
+
+  A prototype is a tuple of strings.
+   The first element is the function kind (FUNCTION_KIND), one of: `abstract operation`, `syntax-directed operation`, `concrete method CLASS_NAME`, `internal method CLASS_NAME`.
+   The second element is the function name (FUNCTION_NAME), as provided in the spec. If the provided name contains a slash, like "AAAA / BBBB", connect it with underscore: `AAAA_BBBB`.
+   Next elements are arguments with types, in the format `ARGUMENT: TYPE`.
+   The return type, if present, is provided in the last element as: `return: TYPE`.
+  I.e.: `("FUNCTION_KIND", "FUNCTION_NAME", "arg1: Type1", "arg2: Type2", "return: ReturnType")`.
+
+  An "abstract operation" is just a regular function. Use FUNCTION_KIND = "abstract operation".
+   If the function name of the abstract operation contains double colon ("::") replace it with a dot ("."), so "NAME1 : : NAME2" becomes `NAME1.NAME2`.
+
+  If the spec says "syntax - directed operation", then it is a method, so insert additional `self: Self` as the first argument (even if the spec says there are no arguments). Use FUNCTION_KIND = "syntax-directed operation".
+   I.e.: `("syntax-directed operation", "FUNCTION_NAME", "self: Self", "arg1: Type1", "arg2: Type2", "return: ReturnType")`.
+
+  A "concrete method" of some class is a function that will be a method of that class, so add the specified symbol (with type) as the first argument. Use FUNCTION_KIND = "concrete method CLASS_NAME".
+   Use the provided special variable name instead of `self` in concrete methods. I.e. if the spec says "The METHOD_NAME concrete method of a CLASS_NAME `VARIABLE` ..." use VARIABLE as the first argument.
+   I.e.: `("concrete method CLASS_NAME", "FUNCTION_NAME", "VARIABLE: Self", "arg1: Type1", "arg2: Type2", "return: ReturnType")`.
+
+  If some type can not be determined, omit it, providing just the argument name.
+  If the spec explicitly says the argument is optional (like "optional argument"), append `" /optional"` at the end of the line with that argument (`arg: Type /optional`). Note that returning "undefined" is not enough to deem the argument optional. The spec must explicitly mention the word "optional".
+
+  If the spec says about many possible types (like "TYPE1 or TYPE2"), connect them into union using the `|` operator, like: `TYPE1 | TYPE2`.
+  If the spec says "List of TYPEs" where the second type is plural, it means `List[TYPE]`.
+  Whenever the spec says "property keys" it means the type `PropertyKey`.
+
+  A type of form "Nonterminal(XXX) Parse Node" should be converted to a type `ParseNode[Nonterminal(XXX)]`.
+
+  A "completion" is a type `CompletionRecord`. Additional qualifiers possible on a completion are:
+   "normal completion" is `CompletionRecord`
+   "abrupt completion" is `CompletionRecord.type_('abrupt')`
+   "XXX completion" except "normal" is `CompletionRecord.type_('XXX')`
+   "normal completion containing YYY" is CompletionRecord[YYY]`
+
+  A "record" type is a class `Record` with additional field specification. Add those fields as a dict in square braces. I.e. when the spec says "Record with fields `AAA` (a TYPE1) and `BBB` (a TYPE2)", use: `Record[{'AAA':TYPE1, 'BBB':Type2}]`
+
+  When the spec says about subclass of a type, just use the base type.
+
+  When the spec says "ECMAScript language value", use `ECMAScriptLanguageValue`.
+  When the spec says "function object" or "ECMAScript function object", use `ECMAScriptFunctionObject`
+  When the spec uses type name "boolean" or "bool", use `Boolean`.
+  When the spec uses type name "integer" or "int", use `BigInt`.
+  When the spec uses type name "string" or "str", use `String`.
+  When the spec uses type name "list" or "sequence", use `List`.
+  When the spec uses type name "object", use `Object`.
+  When the spec uses type name "ordinary object", use `OrdinaryObject`.
+  When the spec says the function returns "null", use type `type(Null)`.
+  When the spec says the function returns "undefined", use type `type(Undefined)`.
+  When the spec says the function returns "∞", use type `type(Infinity)`.
+  When the spec says "code point", use type `CodePoint`.
+  When the spec says "RegExp Record", use type `RegExp`.
+  When the spec says "any value", use type `object`.
+  When the spec says "SOME_TYPE except OTHER_TYPE", use expression: `SOME_TYPE - Except(OTHER_TYPE)`.
+
+  If none of the rules above apply and a type spec ends with "Record", include that "Record" as part of the type name. I.e. "Some Thing Record" should be `SomeThingRecord`.
+  If none of the rules above apply and a multi-word type description ends with "Object", remove the final word "Object" from the type name. I.e. "Some Thing Object" should be just `SomeThing` (skipping "Object").
+
+  Example:
+   If you receive the input: "The syntax - directed operation Evaluation takes no arguments and returns a Completion Record ."
+   respond with: `("syntax-directed operation", "Evaluation", "self: Self", "return: CompletionRecord")`
+
+  Print the tuple.
+ </prompt>
+
+ <prompt context="Algorithm">
+  <!-- Prompt present in all requests to make a function from ECMA specification. -->
+  Whevever the specification uses function call notation with braces like "&lt;function&gt; `FUNCTION` ( ARGS )", take it as `FUNCTION(ARGS)`.
+
+  Whenever the specification says "with argument" or "with arguments", put those arguments in the relevant method call.
+  Literals in triangular braces like "« A, B, C »" are lists. Convert them to `[A, B, C]`. Also, "« »" is an empty list `[]`.
+  Whenever the specification says "numeric value of SOMETHING", use the method `SOMETHING.NumericValue()`.
+  Keep the name of the method `Contains` as it is; do not convert to lowercase.
+
+  Use the following constant mapping:
+   "undefined" to `Undefined`;
+   "null" to `Null`;
+   "true" to `True`;
+   "false" to `False`;
+   "+ ∞" to `+Infinity`;
+   "- ∞" to `-Infinity`.
+  Use the constant `Null` when documentation says "null".
+  The special expression "+ 0 ( 𝔽 )" means `+Zero` and the special expression "- 0 ( 𝔽 )" means `-Zero`, but if "0" appears in other context just use literal `0`.
+  The constant "NaN" is just `NaN`.
+
+  When testing if "`VARIABLE` is undefined", use equality operator: `VARIABLE == Undefined`.
+  When testing if "`VARIABLE` is null", use equality operator: `VARIABLE == Null`.
+  When using a value in a test "if VALUE is true ...", test for boolean value: `if VALUE: ...`.
+  When using a value in a test "if VALUE is false ...", negate the value: `if not VALUE: ...`.
+
+  Whenever the specification says "VALUE is a TYPE" or "VALUE is an TYPE" it is a type check, so use `isinstance(VALUE, TYPE)`, except when TYPE is a Nonterminal.
+  When testing for types, like `Bool`, `String`, `Number`, `BigInt`, `List`, `Array`, `Object`, 'ECMAScriptFunctionObject`  etc. using the construction "VALUE is a TYPE", keep the original type name and do not change it to Python equivalent, i.e. `isinstance(VALUE, TYPE)`.
+  Whenever the specification says to throw an exception SOME_ERROR, return `CompletionRecord(Type=Enum_['throw'], Value='SOME_ERROR')`.
+  Whenever the specification line starts with "Assert :" insert `assert CONDITION` where CONDITION is Python code. Interpret the rest of the line after "Assert :" as the condition to check.
+  Whenever a symbol or dot expression is between percent signs (like "% SYM %" or "% ID1.ID2 %") take it as an attribute of `well_known`, i.e. `well_known.SYM` or `well_known.ID1.ID2`.
+  To check if a VALUE is a "TYPE completion", test if its `Type` attribute is equal to `Enum_['TYPE']`.
+  To check if a VALUE is an "abrupt completion", test if its `Type` attribute is not equal to `Enum_['normal']`.
+  Whenever the specification line starts with "Note : TEXT" insert a comment into generated code (like `# TEXT`) containing the rest of the spec line.
+
+  Whenever some "let" or "set" statement contains the token "&lt;return_if_abrupt&gt;", check if the result VARIABLE (keep the original variable name) is an abrupt completion.
+   If yes, return the value from the function.
+   If no, substitute the value with the attribute `Value` of the value.
+  Example: "let `VARIABLE` be &lt;return_if_abrupt&gt; &lt;function&gt; ..." or "let `VARIABLE` be ? &lt;method&gt; ..."  ->  `VARIABLE = ...\nif VARIABLE.Type != Enum_['normal']:\n\treturn VARIABLE\nelse:\n\tVARIABLE = VARIABLE.Value`.
+
+  Whenever a "perform" statement contains the token "&lt;return_if_abrupt&gt;", save the result to some VARIABLE with unique temporary name (prepend `result_NUM = `) and check if it is an abrupt completion.
+   If yes, return the value from the function.
+  Example: "perform &lt;return_if_abrupt&gt; &lt;function&gt; ..." or "perform &lt;return_if_abrupt&gt; &lt;method&gt; ..."  ->  `VARIABLE = ...\nif VARIABLE.Type != Enum_['normal']:\n\treturn VARIABLE`.
+
+  Whenever a "return" statement contains the token "&lt;return_if_abrupt&gt;" no special action is needed; just return the result unmodified. Do not extract fields nor create `CompletionRecord`; it will be done automatically.
+  Do not create `CompletionRecord` unless explicitly told so.
+
+  Whenever some "let" or "set" statement contains the token "&lt;raise_if_abrupt&gt;", check if the result VARIABLE (keep the original variable name) is an abrupt completion.
+   If yes, raise RuntimeError.
+   If no, substitute the value with the attribute `Value` of the value.
+  Example: "let `VARIABLE` be &lt;raise_if_abrupt&gt; &lt;function&gt; `ArrayCreate` ( ... )"  ->  `VARIABLE = ArrayCreate (...)\nif VARIABLE.Type != Enum_['normal']:\n\traise RuntimeError("As per spec this function must return normal completion.")\nelse:\n\tVARIABLE = VARIABLE.Value`.
+
+  Whenever a "perform" statement contains the token "&lt;raise_if_abrupt&gt;", save the result to some VARIABLE with unique temporary name (prepend `result_NUM = `) and check if it is an abrupt completion.
+   If yes, raise RuntimeError.
+  Example: "perform &lt;raise_if_abrupt&gt; &lt;function&gt; `InitializeReferencedBinding` ( ... )"  ->  `VARIABLE = ... InitializeReferencedBinding(...)\nif VARIABLE.Type != Enum_['normal']:\n raise\tRuntimeError("As per spec this function must return normal completion.")`.
+
+  Whenever the specification says "`𝔽` ( VALUE )" or "VALUE (𝔽)" or "Number value for VALUE" it means `Number(VALUE)`.
+  Whenever the specification says "`ℤ` ( VALUE )" or "VALUE (ℤ)" or "BigInt value for VALUE" it means `BigInt(VALUE)`.
+  Whenever the specification says "`ℝ` ( VALUE )" or "mathematical value of VALUE" it means `VALUE.MV()`.
+  Expressions of the form "U + XXXX ( DESCR )" are Unicode codepoints. Convert them to `chr(0xXXXX)` and put DESCR in the comment in the same line. To obtain numeric value of such Unicode codepoint use function `ord`.
+
+  To obtain the running execution context, call `execution_context_stack[-1]`.
+  
+  When creating a closure or another capturing function-like object with a specified type (like "MatcherContinuation") add that type as a decorator over that closure. If no type is specified, add a decorator `@AbstractClosure`.
+  To check for duplicates, use `len(COLLECTION) == len(set(COLLECTION))`.
+
+  If other rules don't apply, when the specification says "A is B", use `A == B`; when the specification says "A is not B", use `A != B`.
+
+  Never return CompletionRecord unless the spec explicitly says "Return Completion Record". ReferenceRecord is not CompletionRecord.
+  Do not return `CompletionRecord(Type=Enum_['normal'], Value=XXX)`, just return `XXX` instead.
+
+  Replace dot - double square brace expression with single brace, i.e. convert "OBJ . [ [ SOMETHING ] ]" to `OBJ[SOMETHING]`.
+ </prompt>
+
+ <prompt context="Syntax Directed Operation">
+  <!-- Prompt present in all requests to make a syntax-directed operation. SDOs are methods of the class `ParseNode` and therefore always have `self` argument. -->
+  Every syntax-directed operation begins with a match against a Production. If `self` matches the production, some algorithm is performed. If `self` does not match the production, the function returns `NotImplemented`.
+
+  Whenever the specification says "this production", take it as `self`. "This production" always refers to the `self` argument.
+  To check if this production matches a `Production(...)` object, use `self.matches(Production(...))`.
+
+  When comparing a string with a `Terminal`, check its `value` field, that is `STRING == TERMINAL.value`. Also, when checking if a `Terminal` is a member of string collection, use `TERMINAL.value in COLLECTION`.
+  When comparing a string with a `Nonterminal`, use `javascript_grammar.matches(STRING, NONTERMINAL)`.
+  When comparing a `Terminal` with a `Nonterminal`, use `javascript_grammar.matches(TERMINAL.value, NONTERMINAL)`.
+  When the specification says "`StringValue` of XXX is a Nonterminal('ReservedWord')", use `lexical_grammar.matches(XXX.StringValue(), Nonterminal('ReservedWord'))`.
+  When comparing two `Terminal`s, use comparison operator: `TERMINAL1 == TERMINAL2`.
+  When comparing two `Nonterminal`s, use comparison operator: `NONTERMINAL1 == NONTERMINAL2`;
+
+  Whenever the specification says that some non-string object X "is" a Nonterminal YYY, take it as `X.matches(Nonterminal('YYY'))`.
+  Whenever the specification says that some non-string object X "is matched by" a Nonterminal YYY, take it as `X.matches(Nonterminal('YYY'))`.
+
+  When other rules don't apply, take "Nonterminal('NAME')" as `self.get_subtree(Nonterminal('NAME'))`.
+  When other rules don't apply, take "Nth Nonterminal('NAME')" as `self.get_subtree(Nonterminal('NAME'), N)` where N is the number starting from 1. "First" means 1, "second" means 2, etc.
+  When other rules don't apply, take "this Nonterminal('NAME')" as `self.get_subtree(Nonterminal('NAME'), 0)`.
+  When other rules don't apply, take "a Nonterminal('NAME1') that is covered by Nonterminal('NAME2')" as `self.get_subtree(Nonterminal('NAME2')).get_subtree(Nonterminal('NAME1'))`.
+
+  Whenever the specification says "&lt;method&gt; `METHOD` of Nonterminal('NAME')" possibly with arguments ARGS, take it as `SUBTREE.METHOD(ARGS)` where SUBTREE is an object obtained through `self.get_subtree(...)` as in one of the rules above.
+  Whenever the specification says "( [ PARAM ] ) parameter was set" or "this production has ( [ PARAM ] ) parameter", take it as `self.has_param(PARAM)`.
+  To check if a "Nonterminal('NAME') is present", use `self.has_subtree(Nonterminal('NAME'))`.
+  To obtain source text of some object, use method `source()`.
+  To get all items matching Nonterminal('AAA') contained within Nonterminal('BBB'), use iteration: `for item in self.get_subtree(Nonterminal('BBB')).get_all_subtrees(Nonterminal('AAA'))`
+
+  Whenever the specification says "`VARIABLE` is not present", test it as `VARIABLE is None`. Similarly "`VARIABLE` is present" means `VARIABLE is not None`.
+
+  Whenever the specification says "“COLUMN_NAME” column of Table NUMBER", take it as `Table_NUMBER`. Such tables contain lists of properties. To check if a VALUE matches them iterate like `any(VALUE.matches(_property["COLUMN_NAME"]) for _property in Table_NUMBER)`.
+  When the spec says about "Table 66" just iterate over `[_row[COLUMN_NAME] for _row in Table_66]`.
+  When the spec says about "Table 67" just iterate over `[_row[COLUMN_NAME] for _row in Table_67]`.
+ </prompt>
+
+ <prompt context="Early Errors">
+  <!--
+   Prompt present in all requests to make an "early errors" sub-procedure (a syntax-directed operation). These methods have `self` and `goal` arguments.
+   If the `self` parse node does not match any production, it should return `NotImplemented`.
+  -->
+  The `goal` argument is of type Nonterminal.
+  To check if a VALUE is some Unicode code point matched by the Nonterminal('XXX') lexical grammar production, use `lexical_grammar.matches(chr(VALUE), Nonterminal('XXX'))`.
+  To check if a character value VALUE is the numeric value of some code point matched by the Nonterminal('NONTERMINAL') lexical grammar production, use `lexical_grammar.matches(chr(VALUE), Nonterminal('XXX'))`.
+  To check if a goal symbol of the syntactic grammar is some nonterminal, compare the `goal` argument with the nonterminal using equality operator `==`.
+  Whenever the specification says "It is a Syntax Error if ...", test if the condition is met and raise `SyntaxError("SPEC_LINE")` if so. Put the error specification as SPEC_LINE, starting from "It is a Syntax Error...". Escape quote characters inside the string.
+  The phrase "any source text is matched by this production" always evaluates to true.
+  To check if the source text is being processed by a direct eval use `execution_context_stack[-1].is_direct_eval()`.
+ </prompt>
+
+ <prompt context="Evaluation">
+  <!--
+   Prompt present in all requests to make an "Evaluation" sub-procedure (a syntax-directed operation). These methods have `self` argument.
+   If the `self` parse node does not match any production, it should return `NotImplemented`.
+  -->
+  To check if debugging is enabled, call `is_debug_enabled()`.
+  To perform an implementation-defined debugging action, call the function `debug` (like: `result = debug()`) and then return the completion record `Completion(result)`.
+
+  Never return `CompletionRecord(Type=Enum_['normal'], Value=NotImplemented)`, just return `NotImplemented`.
+ </prompt>
+
+ <prompt context="Abstract Operation">
+  <!-- Prompt present in all requests to make an abstract operation. -->
+  To test if a number is a "NaN", use `number is NaN`.
+  To test if a number is (plus or minus) "∞", use `number is +Infinity` or `number is -Infinity`.
+  To test if a number is a "+ 0 ( 𝔽 )" or "- 0 ( 𝔽 )", use `number is +Zero` or `number is -Zero`.
+  To check if an object OBJ has internal method METHOD, use `hasattr(OBJECT, 'METHOD')`.
+  To check if an object OBJ has at least one internal method, use, `any(hasattr(OBJECT, _method) for _method in all_internal_methods)`.
+  The list of all internal method names is in global variable `all_internal_methods`. The list of essential internal methods is in global variable `essential_internal_methods`.
+  To check if an object OBJ has a property PROP, use `PROP in OBJ`.
+
+  To test if a VALUE is a Private Name, use `isinstance(VALUE, PrivateName)`.
+  The the surrounding agent 's Agent Record can be obtained from the global variable `agent_record`.
+  `GlobalSymbolRegistry` is a global variable.
+
+  To create an accessor property use the constructor with attribute names as arguments. The default attribute values are provided here: `AccessorProperty(Get=Undefined, Set=Undefined, Enumerable=False, Configurable=False)`.
+  To create an data property use the constructor with attribute names as arguments. The default attribute values are provided here: `DataProperty(Value=Undefined, Writable=False, Enumerable=False, Configurable=False)`.
+
+  Assume all external symbols referenced by the current function are already defined and do not provide their implementations inside the function.
+
+  Whenever the specification says to "set SOMETHING as described in CHAPTER_NUMBER", use: `SOMETHING = as_described_in('CHAPTER_NUMBER')`. Remove whitespace from CHAPTER_NUMBER.
+ </prompt>
+
+</codegen>
