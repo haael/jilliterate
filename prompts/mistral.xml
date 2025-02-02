@@ -243,6 +243,7 @@ def function():
   Assume all external symbols referenced by the current function are already defined and do not provide their implementations inside the function.
 
   Whenever the specification says to "set SOMETHING as described in CHAPTER_NUMBER", use: `SOMETHING = as_described_in('CHAPTER_NUMBER')`. Remove whitespace from CHAPTER_NUMBER.
+  When the specification says to create an instance of TYPE followed by dict-like initializer, like "TYPE { KEY1: VALUE1, KEY2: VALUE2, ... }", pass the dict initializer to the type constructor using kwargs syntax, like: `TYPE(**{KEY1:VALUE1, KEY2,VALUE2, ...})`.
  </prompt>
 
 </codegen>

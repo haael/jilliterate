@@ -130,15 +130,15 @@ if __name__ == '__main__':
 	#print(list(codegen.list_models()))
 	#codegen.configure(model='qwen2.5-coder-7b-instruct')
 	
-	## Mistral.ai
-	#codegen = Codegen('https://api.mistral.ai/v1', api_key=environ['MISTRAL_API_KEY'])
-	#print(list(codegen.list_models()))
-	#codegen.configure(model='codestral-latest')
-	
-	# groq.com
-	codegen = Codegen('https://api.groq.com/openai/v1', api_key=environ['GROQ_API_KEY'])
+	# Mistral.ai
+	codegen = Codegen('https://api.mistral.ai/v1', api_key=environ['MISTRAL_API_KEY'])
 	print(list(codegen.list_models()))
-	codegen.configure(model='gemma2-9b-it', prepend_prefix=True)
+	codegen.configure(model='codestral-latest')
+	
+	## groq.com
+	#codegen = Codegen('https://api.groq.com/openai/v1', api_key=environ['GROQ_API_KEY'])
+	#print(list(codegen.list_models()))
+	#codegen.configure(model='gemma2-9b-it', prepend_prefix=True)
 	
 	print()
 	print()

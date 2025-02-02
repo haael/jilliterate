@@ -541,7 +541,7 @@ if __name__ == '__main__':
 		specification = load(fd)
 	
 	codegen = Codegen('https://api.groq.com/openai/v1', api_key=environ['GROQ_API_KEY'])
-	codegen.configure(model='gemma2-9b-it', prepend_prefix=True, rate_limit=3, min_delay=2, rate_limit_down=0.05, rate_limit_up=0.5)
+	codegen.configure(model='gemma2-9b-it', prepend_prefix=True, rate_limit=4, min_delay=3, rate_limit_down=0.05, rate_limit_up=0.75)
 	verbose = True
 	tee_files('gencode/ao_library.py', print_=verbose)(compile_abstract_operations)(specification, codegen, prompt)
 	tee_files('gencode/early_errors.py', print_=verbose)(compile_early_errors)(specification, codegen, prompt)
