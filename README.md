@@ -8,9 +8,11 @@ ECMA specification [https://tc39.es/ecma262/] consists of "algorithms" in inform
 ```
 13.2.8.3 Static Semantics: TemplateString ( templateToken, raw )
 
-The abstract operation TemplateString takes arguments templateToken (a NoSubstitutionTemplate Parse Node,
-a TemplateHead Parse Node, a TemplateMiddle Parse Node, or a TemplateTail Parse Node) and raw (a Boolean)
-and returns a String or undefined. It performs the following steps when called:
+The abstract operation TemplateString takes arguments templateToken
+(a NoSubstitutionTemplate Parse Node, a TemplateHead Parse Node, a
+TemplateMiddle Parse Node, or a TemplateTail Parse Node) and raw (a
+Boolean) and returns a String or undefined. It performs the following
+steps when called:
 
     1. If raw is true, then
            a. Let string be the TRV of templateToken.
