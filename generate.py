@@ -36,6 +36,8 @@ from specification import *
 
 
 def roman(n:int)->str:
+	"Make a Roman numeral."
+	
 	roman_numerals = {1000:'M', 900:'CM', 500:'D', 400:'CD', 100:'C', 90:'XC', 50:'L', 40:'XL', 10:'X', 9:'IX', 5:'V', 4:'IV', 1:'I'}
 	roman_numeral = ''
 	for value, numeral in sorted(roman_numerals.items(), reverse=True):
@@ -46,6 +48,8 @@ def roman(n:int)->str:
 
 
 def render_cmd(index, content):
+	"Make a string representing a single 'command' (i.e. sentence) from ECMA spec. Render all markup as ASCII."
+	
 	assert not isinstance(content, str|SpecialSymbol)
 	result = []
 	for token in content:
@@ -82,6 +86,8 @@ def render_cmd(index, content):
 
 
 def render_node(node, path, index, **kwargs):
+	"Make a string representation of an object from ECMA grammar (i.e. algorithm, table, reference etc.)."
+	
 	if path[-1] == 'Cmd':
 		yield from render_cmd(index, kwargs['content'])
 		#yield path, index, " ".join(render_cmd(kwargs['content']))
@@ -173,6 +179,8 @@ def render_node(node, path, index, **kwargs):
 
 
 def render_scattered_sdo(node, path, index, **kwargs):
+	"Iterate through all clauses and print out a 'scattered' syntax-directed operation, one that is spread across many clauses. There are 2 such functions: Evaluate and Early Errors."
+	
 	if path[-1] == 'Clause':
 		prevkind = None
 		sdo = False
@@ -220,6 +228,8 @@ def render_scattered_sdo(node, path, index, **kwargs):
 
 
 def specification_early_errors(specification):
+	"Prepare the spec of Early Errors. Yields all subsections of Early Errors one by one."
+	
 	for clause in specification.find_clauses_with_title("Static Semantics: Early Errors"):
 		result = []
 		for line in clause.render(render_scattered_sdo):
@@ -232,6 +242,8 @@ def specification_early_errors(specification):
 
 
 def specification_evaluation(specification):
+	"Prepare the spec of Evaluation. Yields all subsections of Early Errors one by one."
+	
 	for clause in specification.find_clauses_with_title("Runtime Semantics: Evaluation"):
 		if not clause.paragraphs:
 			continue
@@ -248,6 +260,8 @@ def specification_evaluation(specification):
 
 
 def specification_abstract_operations(specification):
+	"Prepare the spec of abstract operations. Yields all operations from the spec one by one."
+	
 	for clause in specification.find_clauses_with_title_ending_with(")"):
 		if ("::" in clause.title) or ("." in clause.title) or ("EnumerateObjectProperties " in clause.title) or ("CreateIntrinsics " in clause.title):
 			continue
@@ -282,6 +296,8 @@ def specification_abstract_operations(specification):
 
 
 def specification_syntax_directed_operations(specification):
+	"Prepare the spec of syntax-directed operations. Yields all operations from the spec. First yields the operation header, then all its subsections one by one, then the header of the next operation and so on."
+	
 	for clause in chain(specification.find_clauses_with_title_starting_with("Static Semantics:"), specification.find_clauses_with_title_starting_with("Runtime Semantics:")):
 		if clause.title.endswith(": SV") or clause.title.endswith(": MV") or clause.title.endswith(": TV") or clause.title.endswith(": TRV"):
 			continue
@@ -313,6 +329,8 @@ def specification_syntax_directed_operations(specification):
 
 
 def generate_header(codegen, prompt, spec):
+	"Ask AI to generate a header, that is the prototype of a function from its spec."
+	
 	personality = prompt[""] + prompt["Prototype"]
 	result = codegen.request(personality, spec).strip()
 	print(result)
@@ -342,24 +360,28 @@ def generate_header(codegen, prompt, spec):
 
 
 def generate_early_errors(codegen, prompt, spec, func_name, func_args, func_arg_types, func_arg_optional, func_return_type):
+	"Ask AI to generate Early Errors."
 	personality = prompt[""] + prompt["Algorithm"] + prompt["Syntax Directed Operation"] + prompt["Early Errors"]
 	prototype = 'def ' + func_name + '(' + ', '.join(_arg + ': ' + _type + (' = None' if _optional else '') for (_arg, _type, _optional) in zip(func_args, func_arg_types, func_arg_optional)) + ')' + ((' -> ' + func_return_type) if func_return_type else '') + ':\n\t'
 	return codegen.request(personality, spec, prototype)
 
 
 def generate_evaluation(codegen, prompt, spec, func_name, func_args, func_arg_types, func_arg_optional, func_return_type):
+	"Ask AI to generate Evaluation."
 	personality = prompt[""] + prompt["Algorithm"] + prompt["Syntax Directed Operation"] + prompt["Evaluation"]
 	prototype = 'def ' + func_name + '(' + ', '.join(_arg + ': ' + _type + (' = None' if _optional else '') for (_arg, _type, _optional) in zip(func_args, func_arg_types, func_arg_optional)) + ')' + ((' -> ' + func_return_type) if func_return_type else '') + ':\n\t'
 	return codegen.request(personality, spec, prototype)
 
 
 def generate_condition(codegen, prompt, spec, func_name, func_args, func_arg_types, func_arg_optional, func_return_type):
+	"Ask AI to generate a single subsection of a syntax-directed operation."
 	personality = prompt[""] + prompt["Algorithm"] + prompt["Syntax Directed Operation"]
 	prototype = 'def ' + func_name + '(' + ', '.join(_arg + ': ' + _type + (' = None' if _optional else '') for (_arg, _type, _optional) in zip(func_args, func_arg_types, func_arg_optional)) + ')' + ((' -> ' + func_return_type) if func_return_type else '') + ':\n\t'
 	return codegen.request(personality, spec, prototype)
 
 
 def generate_algorithm(codegen, prompt, spec, func_name, func_args, func_arg_types, func_arg_optional, func_return_type):
+	"Ask AI to generate a single abstract operation."
 	personality = prompt[""] + prompt["Algorithm"] + prompt["Abstract Operation"]
 	prototype = 'def ' + func_name + '(' + ', '.join(_arg + ': ' + _type + (' = None' if _optional else '') for (_arg, _type, _optional) in zip(func_args, func_arg_types, func_arg_optional)) + ')' + ((' -> ' + func_return_type) if func_return_type else '') + ':\n\t'
 	return codegen.request(personality, spec, prototype)
