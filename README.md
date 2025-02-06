@@ -19,7 +19,7 @@ I get the best results with Mistral (namely codestral) [https://mistral.ai/].
 I also tried Qwen run locally through Jan.ai [https://jan.ai/]. Qwen has a tendency to chat, that means it generates
 human-readable output instead of Python code.
 
-Gemma through Groq [https://groq.com/groqcloud/] is the fastest model but makes syntax errors. And can't understand some instructions.
+Gemma through Groq [https://groq.com/groqcloud/] is the fastest model but makes syntax errors and can't understand some instructions.
 
 
 ## How?
@@ -44,7 +44,7 @@ export LLM_CONFIG_EXTRA="{}"
 ./codegen.py
 ```
 
-The script will generate some algorithms. Check if they are right.
+The script will generate some algorithms. Check if they are right. You may put the environment variables to the file `my_platform.sh` and source it. Always make sure the file is in `.gitignore`. Do not commit your API keys.
 
 Finally, generate the interpreter.
 
@@ -82,6 +82,7 @@ If you wish to contribute, try the following:
 3. Try fine-tuning the model.
 4. Implement EBNF grammar parser with all necessary features needed by Javascript. Try doing it by constructing a prompt for AI.
 5. Implement all the backend structures referenced by the ECMA grammar by feeding pieces of the spec into AI.
+6. Make a better logo (AI-generated images preferred.)
 
 Also look at my other project, an SVG-first web browser: [https://github.com/haael/guixmpp].
 
