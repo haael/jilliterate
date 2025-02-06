@@ -36,10 +36,11 @@ Then run the specification script that will convert it to a Python pickle format
 Then configure your favourite LLM platform. Provide the URL to OpenAI-compatible endpoint and export the API key. Then test it.
 
 ```
-export LLM_API_URL=<OpenAI compatible endpoint>
-export LLM_API_KEY=<Your API key>
-export LLM_MODEL=codestral
-export LLM_CONFIG_EXTRA='{}'
+export LLM_API_URL=https://api.mistral.ai/v1
+export LLM_API_KEY=<your API key>
+export LLM_MODEL=codestral-latest
+export LLM_CONFIG_EXTRA="{}"
+
 ./codegen.py
 ```
 
