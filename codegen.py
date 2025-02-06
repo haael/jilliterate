@@ -57,9 +57,14 @@ class Codegen:
 		
 		#print(json.dumps(data))
 		response = requests.post(url, data=json.dumps(data), headers=headers)
+		
+		try:
+			response.raise_for_status()
+		except Exception as error:
+			print("error", response.text)
+			raise
+		
 		result = response.json()
-		#print("result", result.keys())
-		response.raise_for_status()
 		content = result['choices'][0]['message']['content']
 		prompt_tokens = result['usage']['prompt_tokens']
 		completion_tokens = result['usage']['completion_tokens']
@@ -130,23 +135,29 @@ if __name__ == '__main__':
 	#print(list(codegen.list_models()))
 	#codegen.configure(model='qwen2.5-coder-7b-instruct')
 	
-	# Mistral.ai
-	codegen = Codegen('https://api.mistral.ai/v1', api_key=environ['MISTRAL_API_KEY'])
-	print(list(codegen.list_models()))
-	codegen.configure(model='codestral-latest')
+	## Mistral.ai
+	#codegen = Codegen('https://api.mistral.ai/v1', api_key=environ['MISTRAL_API_KEY'])
+	#print(list(codegen.list_models()))
+	#codegen.configure(model='codestral-latest')
 	
 	## groq.com
 	#codegen = Codegen('https://api.groq.com/openai/v1', api_key=environ['GROQ_API_KEY'])
 	#print(list(codegen.list_models()))
 	#codegen.configure(model='gemma2-9b-it', prepend_prefix=True)
 	
-	print()
-	print()
-	print("Test 0: test")
-	print()
-	result = codegen.request("This is a test.", "Print 'hello void'.", "h")
-	print(result)
-	print()
+	print("URL:  ", environ['LLM_API_URL'])
+	print("model:", environ['LLM_MODEL'])
+	codegen = Codegen(url=environ['LLM_API_URL'], api_key=environ['LLM_API_KEY'])
+	print(list(codegen.list_models()))
+	codegen.configure(model=environ['LLM_MODEL'], **eval(environ['LLM_CONFIG_EXTRA']))
+	
+	#print()
+	#print()
+	#print("Test 0: test")
+	#print()
+	#result = codegen.request("This is a test.", "Print 'hello void'.", "h")
+	#print(result)
+	#print()
 	
 	personality = """
 		You are a code generator. You print functions in Python language, as specified by requirements. Print only blocks of code.
@@ -158,7 +169,7 @@ if __name__ == '__main__':
 	print()
 	print("Test 1: prime")
 	print()
-	result = codegen.request(personality, "A function that makes a Roman numeral from the given integer.", 'def roman(n:int)->str:\n\t')
+	result = codegen.request(personality, "A function that makes a Roman numeral from the given integer.") #, 'def roman(n:int)->str:\n\t')
 	print(result)
 	print()
 	
