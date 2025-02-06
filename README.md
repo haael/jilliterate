@@ -92,6 +92,8 @@ If you wish to contribute, try the following:
 
 Also look at my other project, an SVG-first web browser: [https://github.com/haael/guixmpp].
 
+<a href="https://github.com/haael/guixmpp"><img src="https://raw.githubusercontent.com/haael/guixmpp/refs/heads/master/examples/gfx/mayfly.svg" height="200" alt="guixmpp"></a>
+
 ## Help
 
 Sponsor me, as I need to pay for Mistral!
