@@ -1,33 +1,6 @@
 #!/usr/bin/python3
 
 
-
-from random import choice, randint
-
-
-class CodegenMock:
-	def __init__(self, **kwargs):
-		pass
-	
-	def init(self):
-		pass
-	
-	def __random_str(self):
-		result = ""
-		while ":" not in result:
-			result = "".join(choice(":::  _abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ") for _n in range(randint(40, 95)))
-		return result
-	
-	def request(self, system, user, prefix=None):
-		if prefix is None:
-			prefix = ""
-		return prefix + "\n\t".join(self.__random_str() for _n in range(randint(5, 15)))
-	
-	def finish(self):
-		pass
-
-
-
 from itertools import chain
 from pathlib import Path
 
@@ -568,7 +541,7 @@ if __name__ == '__main__':
 	codegen.configure(model=environ['LLM_MODEL'], **eval(environ['LLM_CONFIG_EXTRA']), rate_limit=4, min_delay=3, rate_limit_down=0.05, rate_limit_up=0.75)
 	
 	dest_dir = Path('gencode')
-	dest_dir.mkdir(exists_ok=True)
+	dest_dir.mkdir(exist_ok=True)
 	
 	verbose = True
 	tee_files(dest_dir / 'ao_library.py', print_=verbose)(compile_abstract_operations)(specification, codegen, prompt)

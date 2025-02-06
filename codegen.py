@@ -4,6 +4,32 @@
 import requests
 import json
 from time import sleep
+from random import choice, randint
+
+
+class MockCodegen:
+	"Mock code generator that creates random gibberish."
+	
+	def __init__(self, **kwargs):
+		pass
+	
+	def configure(self, **kwargs):
+		pass
+	
+	def list_models(self):
+		return []
+	
+	def __random_str(self):
+		result = ""
+		while ":" not in result:
+			result = "".join(choice(":::  _abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ") for _n in range(randint(40, 95)))
+		return result
+	
+	def request(self, system, user, prefix=None):
+		# TODO: generate 
+		if prefix is None:
+			prefix = ""
+		return prefix + "\n\t".join(self.__random_str() for _n in range(randint(5, 15)))
 
 
 class Codegen:

@@ -74,7 +74,7 @@ def download_page(link, spec_dir):
 if __name__ == '__main__':
 	baseurl = 'https://tc39.es/ecma262/multipage/'
 	spec_dir = Path('specification')
-	spec_dir.mkdir(exists_ok=True)
+	spec_dir.mkdir(exist_ok=True)
 	possible_links = set({''})
 	visited_links = set()
 	

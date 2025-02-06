@@ -1,4 +1,4 @@
-<codegen name="Mistral" language="Python" class="MistralCodegen" model="codestral-latest" temperature="0.06">
+<codegen language="Python">
 
  <prompt>
   <!-- Universal prompt, prepended to all requests. -->
