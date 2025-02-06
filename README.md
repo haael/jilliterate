@@ -12,7 +12,7 @@ As an experiment, I tried to feed it to LLM. The result surpassed my expectation
 
 ![code comparison](varia/codegen-comparison.png)
 
-## Which?
+## Which one?
 
 I get the best results with Mistral (namely codestral) [https://mistral.ai/].
 
@@ -24,6 +24,7 @@ Gemma through Groq [https://groq.com/groqcloud/] is the fastest model but makes 
 
 ## How?
 
+### 1.
 First, check out the repository.
 Then run the download script, that will download ECMA spec and convert it to XML.
 
@@ -33,7 +34,8 @@ Then run the specification script that will convert it to a Python pickle format
 
 `./specification.py`
 
-Then configure your favourite LLM platform. Provide the URL to OpenAI-compatible endpoint and export the API key. Then test it.
+### 2.
+Configure your favourite LLM platform. Provide the URL to OpenAI-compatible endpoint and export the API key, then test it.
 
 ```
 export LLM_API_URL=https://api.mistral.ai/v1
@@ -46,6 +48,9 @@ export LLM_CONFIG_EXTRA="{}"
 
 The script will generate some algorithms. Check if they are right. You may put the environment variables to the file `my_platform.sh` and source it. Always make sure the file is in `.gitignore`. Do not commit your API keys.
 
+Some example AI platform configs are in the file `llm_platforms.sh`.
+
+### 3.
 Finally, generate the interpreter.
 
 `./generate.py`
@@ -62,9 +67,10 @@ python3 ./evaluate.py
 python3 ./sdo_library.py
 ```
 
-Now go an implement the backend, that is EBNF parser and all internal structures and you have the Javascript engine.
+### 4.
+TODO: implement the backend, EBNF parser and all internal structures and you have the Javascript engine. Try doing it by feeding chapters of ECMA grammar to AI, with an appropriate system prompt.
 
-## So what?
+## Now what?
 
 With a little help from human devs, we could have a working Javascript interpreter that will beat Chrome and end Google's monopoly.
 
@@ -73,11 +79,11 @@ above assembler.
 
 I see similar projects implementing applications that have a formal specification, especially interpreters and web standards.
 
-## Contribute
+## I'm in
 
 If you wish to contribute, try the following:
 
-1. Find more LLM platforms and test if they work.
+1. Find more LLM platforms and test if they work. Add them to `llm_platforms.sh`.
 2. Modify the prompt, especially to fix syntax errors.
 3. Try fine-tuning the model.
 4. Implement EBNF grammar parser with all necessary features needed by Javascript. Try doing it by constructing a prompt for AI.
