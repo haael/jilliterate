@@ -98,5 +98,17 @@ Also look at my other project, an SVG-first web browser: [https://github.com/haa
 
 Sponsor me, as I need to pay for Mistral!
 
+[![Sponsor haael](https://img.shields.io/static/v1?label=Sponsor%20haael&message=%E2%9D%A4&logo=GitHub&color=%23fe8e86)](https://github.com/sponsors/haael)
 [https://github.com/sponsors/haael]
+
+### Send me crypto
+
+* Bitcoin: `bc1q0neyed0cug40jce9t8xxswsnr68w8rs788u5ws`
+* Ethereum: `0x4D7914F809D7C101dCe71258FA5498475AED18c9`
+* Solana: `7KGJWfcoopQRbgcLGfrKyLPykhdzf5eE88tGth1jjuEj`
+
+| Bitcoin                                  | Ethereum                                 | Solana                                     |
+|------------------------------------------|------------------------------------------|--------------------------------------------|
+|![bc1q0neyed0cug40jce9t8xxswsnr68w8rs788u5ws](varia/jilliterate-BTC.png)|![0x4D7914F809D7C101dCe71258FA5498475AED18c9](varia/jilliterate-ETH.png)|![7KGJWfcoopQRbgcLGfrKyLPykhdzf5eE88tGth1jjuEj](varia/jilliterate-SOL.png)|
+
 
