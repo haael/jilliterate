@@ -546,9 +546,7 @@ if __name__ == '__main__':
 	from lxml.etree import fromstring as xml_frombytes, tostring as xml_tobytes, tounicode as xml_tounicode
 	from os import environ
 	
-	prompt_doc = xml_frombytes(Path('prompts/mistral.xml').read_bytes())
-	model = prompt_doc.attrib['model']
-	temperature = float(prompt_doc.attrib['temperature'])
+	prompt_doc = xml_frombytes(Path('prompt.xml').read_bytes())
 	prompt = {}
 	for child in prompt_doc:
 		context = child.attrib.get('context', "")
@@ -569,11 +567,12 @@ if __name__ == '__main__':
 	print(list(codegen.list_models()))
 	codegen.configure(model=environ['LLM_MODEL'], **eval(environ['LLM_CONFIG_EXTRA']), rate_limit=4, min_delay=3, rate_limit_down=0.05, rate_limit_up=0.75)
 	
-	#codegen = Codegen('https://api.groq.com/openai/v1', api_key=environ['GROQ_API_KEY'])
-	#codegen.configure(model='gemma2-9b-it', prepend_prefix=True, rate_limit=4, min_delay=3, rate_limit_down=0.05, rate_limit_up=0.75)
+	dest_dir = Path('gencode')
+	dest_dir.mkdir(exists_ok=True)
+	
 	verbose = True
-	tee_files('gencode/ao_library.py', print_=verbose)(compile_abstract_operations)(specification, codegen, prompt)
-	tee_files('gencode/early_errors.py', print_=verbose)(compile_early_errors)(specification, codegen, prompt)
-	tee_files('gencode/evaluation.py', print_=verbose)(compile_evaluation)(specification, codegen, prompt)
-	tee_files('gencode/sdo_library.py', print_=verbose)(compile_syntax_directed_operations)(specification, codegen, prompt)
+	tee_files(dest_dir / 'ao_library.py', print_=verbose)(compile_abstract_operations)(specification, codegen, prompt)
+	tee_files(dest_dir / 'early_errors.py', print_=verbose)(compile_early_errors)(specification, codegen, prompt)
+	tee_files(dest_dir / 'evaluation.py', print_=verbose)(compile_evaluation)(specification, codegen, prompt)
+	tee_files(dest_dir / 'sdo_library.py', print_=verbose)(compile_syntax_directed_operations)(specification, codegen, prompt)
 

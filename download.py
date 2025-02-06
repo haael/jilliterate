@@ -7,7 +7,7 @@ from pathlib import Path
 from lxml.etree import fromstring, tounicode
 
 
-def download_page(link):
+def download_page(link, spec_dir):
 	r = requests.get(link)
 	
 	text = r.text
@@ -66,20 +66,22 @@ def download_page(link):
 		name = f"{secnum:02d}-" + name
 	
 	text = '<?xml version="1.0"?>\n' + text
-	Path('specification/' + name + '.xml').write_text(text)
+	(spec_dir / (name + '.xml')).write_text(text)
 	
 	return links
 
 
 if __name__ == '__main__':
 	baseurl = 'https://tc39.es/ecma262/multipage/'
+	spec_dir = Path('specification')
+	spec_dir.mkdir(exists_ok=True)
 	possible_links = set({''})
 	visited_links = set()
 	
 	while unvisited_links := possible_links - visited_links:
 		for link in unvisited_links:
 			print(baseurl + link)
-			links = download_page(baseurl + link)
+			links = download_page(baseurl + link, spec_dir)
 			possible_links.update(links)
 			visited_links.add(link)
 
