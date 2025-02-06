@@ -215,7 +215,7 @@ def specification_early_errors(specification):
 
 
 def specification_evaluation(specification):
-	"Prepare the spec of Evaluation. Yields all subsections of Early Errors one by one."
+	"Prepare the spec of Evaluation. Yields all subsections of Evaluation one by one."
 	
 	for clause in specification.find_clauses_with_title("Runtime Semantics: Evaluation"):
 		if not clause.paragraphs:
