@@ -41,7 +41,7 @@ Configure your favourite LLM platform. Provide the URL to OpenAI-compatible endp
 export LLM_API_URL=https://api.mistral.ai/v1
 export LLM_API_KEY=<your API key>
 export LLM_MODEL=codestral-latest
-export LLM_CONFIG_EXTRA="{}"
+export LLM_CONFIG_EXTRA='{}'
 
 ./codegen.py
 ```
