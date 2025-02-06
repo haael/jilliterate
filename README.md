@@ -24,7 +24,7 @@ Gemma through Groq [https://groq.com/groqcloud/] is the fastest model but makes 
 
 ## How?
 
-### 1.
+### 1. Download
 First, check out the repository.
 Then run the download script, that will download ECMA spec and convert it to XML.
 
@@ -34,7 +34,7 @@ Then run the specification script that will convert it to a Python pickle format
 
 `./specification.py`
 
-### 2.
+### 2. Configure
 Configure your favourite LLM platform. Provide the URL to OpenAI-compatible endpoint and export the API key, then test it.
 
 ```
@@ -50,12 +50,12 @@ The script will generate some algorithms. Check if they are right. You may put t
 
 Some example AI platform configs are in the file `llm_platforms.sh`.
 
-### 3.
+### 3. Generate
 Finally, generate the interpreter.
 
 `./generate.py`
 
-Note that this will take several hours and will likely deplete your token limit.
+This script will send parts of the spec to the configured AI platform. Note that this will take several hours and will likely deplete your token limit.
 
 Now go to `gencode` directory and run each file through Python interpreter to check for syntax errors.
 
@@ -67,7 +67,7 @@ python3 ./evaluate.py
 python3 ./sdo_library.py
 ```
 
-### 4.
+### 4. Implement
 TODO: implement the backend, EBNF parser and all internal structures and you have the Javascript engine. Try doing it by feeding chapters of ECMA grammar to AI, with an appropriate system prompt.
 
 ## Now what?
@@ -84,7 +84,7 @@ I see similar projects implementing applications that have a formal specificatio
 If you wish to contribute, try the following:
 
 1. Find more LLM platforms and test if they work. Add them to `llm_platforms.sh`.
-2. Modify the prompt, especially to fix syntax errors.
+2. Modify the prompt, especially to fix syntax errors ([[prompt.xml](https://github.com/haael/jilliterate/blob/master/prompt.xml)]).
 3. Try fine-tuning the model.
 4. Implement EBNF grammar parser with all necessary features needed by Javascript. Try doing it by constructing a prompt for AI.
 5. Implement all the backend structures referenced by the ECMA grammar by feeding pieces of the spec into AI.
