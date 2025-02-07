@@ -101,6 +101,10 @@ Sponsor me, as I need to pay for Mistral!
 [![Sponsor haael](https://img.shields.io/static/v1?label=Sponsor%20haael&message=%E2%9D%A4&logo=GitHub&color=%23fe8e86)](https://github.com/sponsors/haael)
 [https://github.com/sponsors/haael]
 
+### Spread the word
+
+Share this project on social media.
+
 ### Send me crypto
 
 * Bitcoin: `bc1q0neyed0cug40jce9t8xxswsnr68w8rs788u5ws`
