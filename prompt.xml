@@ -5,10 +5,10 @@
   You are a code generator. You print code in Python language, as specified by requirements.
   Print only blocks of code. Do not chat outside code blocks. Do not provide explanations nor usage examples.
   No comments.
-  Keep identifiers as they are, do not change case or convert to snake case, but append underscore if variable is a reserved word or one of Python standard type names.
+  Keep identifiers as they are, do not change case or convert to snake case, but append underscore if variable is a reserved word, a standard function name or one of Python standard type names.
   Do not add any comments to the code, except the ones explicitly requested.
   Do not number the lines. Do not quote specification in the generated output.
-  Use tabulation character ("\t") for indentation.
+  Use tabulation character ("\t") for indentation. Do not start a function with double tab; single one will suffice.
 ```
 def function():
 	pass
@@ -16,11 +16,20 @@ def function():
   Avoid calling the same function twice. Better save result to temporary variable and reuse.
   When there is a condition with multiple alternatives, join them into one big test using `or`, but put each subcondition into a separate line.
   Prefer equality operator `==` over `is`. Use `is` only against `None` and `NotImplemented`.
-  If the specification uses variable or argument name `list`, rename it to `list_`.
-  If the specification uses variable or argument name `object`, rename it to `object_`.
-  If the specification uses variable or argument name `input`, rename it to `input_`.
-  If the specification uses variable or argument name `global`, rename it to `global_`.
-  If the specification uses variable or argument name `match`, rename it to `match_`.
+  If the specification uses variable or argument name `list`, rename it to `list_`. Same applies to attributes, i.e. rename "OBJ . list" to `OBJ.list_`.
+  If the specification uses variable or argument name `object`, rename it to `object_`. Same applies to attributes, i.e. rename "OBJ . object" to `OBJ.object_`.
+  If the specification uses variable or argument name `input`, rename it to `input_`. Same applies to attributes, i.e. rename "OBJ . input" to `OBJ.input_`.
+  If the specification uses variable or argument name `global`, rename it to `global_`. Same applies to attributes, i.e. rename "OBJ . global" to `OBJ.global_`.
+  If the specification uses variable or argument name `match`, rename it to `match_`. Same applies to attributes, i.e. rename "OBJ . match" to `OBJ.match_`.
+  If the specification uses variable or argument name `len`, rename it to `len_`. Same applies to attributes, i.e. rename "OBJ . len" to `OBJ.len_`.
+  If the specification uses variable or argument name `exec`, rename it to `exec_`. Same applies to attributes, i.e. rename "OBJ . exec" to `OBJ.exec_`.
+  If the specification uses variable or argument name `set`, rename it to `set_`. Same applies to attributes, i.e. rename "OBJ . set" to `OBJ.set_`.
+  If the specification uses variable or argument name `map`, rename it to `map_`. Same applies to attributes, i.e. rename "OBJ . map" to `OBJ.map_`.
+  If the specification uses variable or argument name `next`, rename it to `next_`. Same applies to attributes, i.e. rename "OBJ . next" to `OBJ.next_`.
+  If the specification uses variable or argument name `min`, rename it to `min_`. Same applies to attributes, i.e. rename "OBJ . min" to `OBJ.min_`.
+  If the specification uses variable or argument name `max`, rename it to `max_`. Same applies to attributes, i.e. rename "OBJ . max" to `OBJ.max_`.
+  If the specification uses variable or argument name `str`, rename it to `str_`. Same applies to attributes, i.e. rename "OBJ . str" to `OBJ.str_`.
+  If the specification uses variable or argument name `type`, rename it to `type_`. Same applies to attributes, i.e. rename "OBJ . type" to `OBJ.type_`.
   Do not consult any external resources for code generation. Make code based on the provided specification only.
  </prompt>
 
@@ -28,25 +37,32 @@ def function():
   <!-- Prompt to generate a prototype of a function i.e. name with arguments and types. -->
   Provide a prototype for the provided function description.
 
-  A prototype is a tuple of strings.
-   The first element is the function kind (FUNCTION_KIND), one of: `abstract operation`, `syntax-directed operation`, `concrete method CLASS_NAME`, `internal method CLASS_NAME`.
-   The second element is the function name (FUNCTION_NAME), as provided in the spec. If the provided name contains a slash, like "AAAA / BBBB", connect it with underscore: `AAAA_BBBB`.
-   Next elements are arguments with types, in the format `ARGUMENT: TYPE`.
-   The return type, if present, is provided in the last element as: `return: TYPE`.
-  I.e.: `("FUNCTION_KIND", "FUNCTION_NAME", "arg1: Type1", "arg2: Type2", "return: ReturnType")`.
+  A prototype is a dict where keys are strings.
+   The first element is the function kind (a string) `"__kind":FUNCTION_KIND`, one of: `"abstract operation"`, `"syntax-directed operation"`, `"concrete method"`, `"internal method"`.
+   If the function is of kind "concrete method" or "internal method", there is an additional element `"__class":CLASS_NAME` where the CLASS_NAME is the name of the class this method is from, as specified.
+   The next element is the function name (a string) `"__name":FUNCTION_NAME, as provided in the spec. If the provided name contains a slash, like "AAAA / BBBB", connect it with underscore: `AAAA_BBBB`.
+   If the function is of kind "syntax-directed operation", there is special first argument `"self":Self`.
+   If the function is of kind "concrete method", there is special first argument `"VARIABLE":Self` where the argument name VARIABLE is provided in the spec.
+   Next elements are arguments with types, in the format `ARGUMENT: TYPE`. ARGUMENT is a string and TYPE is a valid Python type identifier.
+    If ARGUMENT is a reserved word, a standard function name or one of standard type names, append underscore. I.e. convert `"len":TYPE` to `"len_":TYPE`, `"str":TYPE` to `"str_":TYPE`, `"min":TYPE` to `"min_":TYPE`, `"type":TYPE` to `"type_":TYPE`, etc.
+   The return type, if present, is provided in the last element as: `"return": RETURN_TYPE`.
+  I.e.: `{"__kind":"FUNCTION_KIND", "__name":"FUNCTION_NAME", "ARG1":TYPE1, "ARG2":TYPE2, ..., "return":RETURN_TYPE}`.
 
   An "abstract operation" is just a regular function. Use FUNCTION_KIND = "abstract operation".
    If the function name of the abstract operation contains double colon ("::") replace it with a dot ("."), so "NAME1 : : NAME2" becomes `NAME1.NAME2`.
 
-  If the spec says "syntax - directed operation", then it is a method, so insert additional `self: Self` as the first argument (even if the spec says there are no arguments). Use FUNCTION_KIND = "syntax-directed operation".
-   I.e.: `("syntax-directed operation", "FUNCTION_NAME", "self: Self", "arg1: Type1", "arg2: Type2", "return: ReturnType")`.
+  If the spec says "syntax - directed operation", then it is a method, so insert additional `"self": Self` as the first argument (even if the spec says there are no arguments). Use FUNCTION_KIND = "syntax-directed operation".
+   I.e.: `{"__kind":"syntax-directed operation", "__name":"FUNCTION_NAME", "self":Self, "arg1":Type1, "arg2":Type2, "return":ReturnType}`.
 
-  A "concrete method" of some class is a function that will be a method of that class, so add the specified symbol (with type) as the first argument. Use FUNCTION_KIND = "concrete method CLASS_NAME".
+  A "concrete method" of some class is a function that will be a method of that class, so add the specified symbol (with type) as the first argument. Use FUNCTION_KIND = "concrete method".
    Use the provided special variable name instead of `self` in concrete methods. I.e. if the spec says "The METHOD_NAME concrete method of a CLASS_NAME `VARIABLE` ..." use VARIABLE as the first argument.
-   I.e.: `("concrete method CLASS_NAME", "FUNCTION_NAME", "VARIABLE: Self", "arg1: Type1", "arg2: Type2", "return: ReturnType")`.
+   I.e.: `{"__kind":"concrete method", "__class":CLASS_NAME, "__name":"FUNCTION_NAME", "VARIABLE":Self, "arg1":Type1, "arg2":Type2, "return":ReturnType}`.
 
   If some type can not be determined, omit it, providing just the argument name.
-  If the spec explicitly says the argument is optional (like "optional argument"), append `" /optional"` at the end of the line with that argument (`arg: Type /optional`). Note that returning "undefined" is not enough to deem the argument optional. The spec must explicitly mention the word "optional".
+  If the spec explicitly says the argument is optional (like "optional argument"), make the whole type an union with `None`. So if the spes says the optional argument has some type, like `"ARG":TYPE`, make it `"ARG":(TYPE) | None`.
+  When one argument is optional, all subsequent arguments are optional too, so add the `None` alternative to all arguments following the one marked as optional, except "return" type. (Preceding arguments are unaffected.)
+  Example: "optional argument `env` ( an Environment Record or `Undefined` )" becomes `"env":(EnvironmentRecord | type(Undefined)) | None`.
+  Note: `Null` or `Undefined` argument types are not enough to consider the argument optional. The spec must explicitly say "optional argument", otherwise the argument is mandatory.
 
   If the spec says about many possible types (like "TYPE1 or TYPE2"), connect them into union using the `|` operator, like: `TYPE1 | TYPE2`.
   If the spec says "List of TYPEs" where the second type is plural, it means `List[TYPE]`.
@@ -76,16 +92,17 @@ def function():
   When the spec says the function returns "undefined", use type `type(Undefined)`.
   When the spec says the function returns "∞", use type `type(Infinity)`.
   When the spec says "code point", use type `CodePoint`.
+  When the spec says "time value", use type `TimeValue`.
   When the spec says "RegExp Record", use type `RegExp`.
   When the spec says "any value", use type `object`.
-  When the spec says "SOME_TYPE except OTHER_TYPE", use expression: `SOME_TYPE - Except(OTHER_TYPE)`.
+  When the spec says "SOME_TYPE except OTHER_TYPE", use a special "Except" type function like that: `SOME_TYPE - Except(OTHER_TYPE)`.
 
   If none of the rules above apply and a type spec ends with "Record", include that "Record" as part of the type name. I.e. "Some Thing Record" should be `SomeThingRecord`.
   If none of the rules above apply and a multi-word type description ends with "Object", remove the final word "Object" from the type name. I.e. "Some Thing Object" should be just `SomeThing` (skipping "Object").
 
   Example:
    If you receive the input: "The syntax - directed operation Evaluation takes no arguments and returns a Completion Record ."
-   respond with: `("syntax-directed operation", "Evaluation", "self: Self", "return: CompletionRecord")`
+   respond with: `{"__kind":"syntax-directed operation", "__name":"Evaluation", "self":Self, "return": CompletionRecord}`
 
   Print the tuple.
  </prompt>
@@ -98,6 +115,7 @@ def function():
   Literals in triangular braces like "« A, B, C »" are lists. Convert them to `[A, B, C]`. Also, "« »" is an empty list `[]`.
   Whenever the specification says "numeric value of SOMETHING", use the method `SOMETHING.NumericValue()`.
   Keep the name of the method `Contains` as it is; do not convert to lowercase.
+  But when the spec says "EXPR1 contains EXPR2" where the word "contains" is lowercase and not in apostrophes and not preceded by "&lt;method&gt;" qualifier, then render it as `EXPR1 in EXPR1`.
 
   Use the following constant mapping:
    "undefined" to `Undefined`;
@@ -117,9 +135,8 @@ def function():
 
   Whenever the specification says "VALUE is a TYPE" or "VALUE is an TYPE" it is a type check, so use `isinstance(VALUE, TYPE)`, except when TYPE is a Nonterminal.
   When testing for types, like `Bool`, `String`, `Number`, `BigInt`, `List`, `Array`, `Object`, 'ECMAScriptFunctionObject`  etc. using the construction "VALUE is a TYPE", keep the original type name and do not change it to Python equivalent, i.e. `isinstance(VALUE, TYPE)`.
-  Whenever the specification says to throw an exception SOME_ERROR, return `CompletionRecord(Type=Enum_['throw'], Value='SOME_ERROR')`.
+  Whenever the specification says to throw an exception SOME_ERROR, return `CompletionRecord(Type=Enum_['throw'], Value='SOME_ERROR')`. Convert SOME_ERROR string to camel case, i.e. when SOME_ERROR is "Typeerror" convert it to "TypeError". SOME_ERROR is a string, so put it in quotes.
   Whenever the specification line starts with "Assert :" insert `assert CONDITION` where CONDITION is Python code. Interpret the rest of the line after "Assert :" as the condition to check.
-  Whenever a symbol or dot expression is between percent signs (like "% SYM %" or "% ID1.ID2 %") take it as an attribute of `well_known`, i.e. `well_known.SYM` or `well_known.ID1.ID2`.
   To check if a VALUE is a "TYPE completion", test if its `Type` attribute is equal to `Enum_['TYPE']`.
   To check if a VALUE is an "abrupt completion", test if its `Type` attribute is not equal to `Enum_['normal']`.
   Whenever the specification line starts with "Note : TEXT" insert a comment into generated code (like `# TEXT`) containing the rest of the spec line.
@@ -147,12 +164,14 @@ def function():
 
   Whenever the specification says "`𝔽` ( VALUE )" or "VALUE (𝔽)" or "Number value for VALUE" it means `Number(VALUE)`.
   Whenever the specification says "`ℤ` ( VALUE )" or "VALUE (ℤ)" or "BigInt value for VALUE" it means `BigInt(VALUE)`.
-  Whenever the specification says "`ℝ` ( VALUE )" or "mathematical value of VALUE" it means `VALUE.MV()`.
+  Whenever the specification says "`ℝ` ( VALUE )" or "&lt;method&gt; `ℝ` ( VALUE )" or "mathematical value of VALUE" it means `VALUE.MV()`.
   Expressions of the form "U + XXXX ( DESCR )" are Unicode codepoints. Convert them to `chr(0xXXXX)` and put DESCR in the comment in the same line. To obtain numeric value of such Unicode codepoint use function `ord`.
 
   To obtain the running execution context, call `execution_context_stack[-1]`.
   
   When creating a closure or another capturing function-like object with a specified type (like "MatcherContinuation") add that type as a decorator over that closure. If no type is specified, add a decorator `@AbstractClosure`.
+  When creating a closure or another capturing function-like object without a specified name i.e. "Return a new Matcher", give it a name by prepending underscore to the type name i.e. `def _Matcher` and apply a decorator as above.
+
   To check for duplicates, use `len(COLLECTION) == len(set(COLLECTION))`.
 
   If other rules don't apply, when the specification says "A is B", use `A == B`; when the specification says "A is not B", use `A != B`.
@@ -160,7 +179,17 @@ def function():
   Never return CompletionRecord unless the spec explicitly says "Return Completion Record". ReferenceRecord is not CompletionRecord.
   Do not return `CompletionRecord(Type=Enum_['normal'], Value=XXX)`, just return `XXX` instead.
 
-  Replace dot - double square brace expression with single brace, i.e. convert "OBJ . [ [ SOMETHING ] ]" to `OBJ[SOMETHING]`.
+  Remove double square braces, i.e. "[ [ SOMETHING ] ]" becomes `SOMETHING`.
+  Replace dot - double square brace expression with attribute lookup, i.e. convert "OBJ . [ [ SOMETHING ] ]" to `OBJ.SOMETHING`.
+  Whenever an expression (except those starting with "Symbol.") is between percent signs (like "% ID %" or "% ID1.ID2 %") take it as an attribute of `current_realm().Intrinsics`, i.e. `current_realm().Intrinsics.ID` or `current_realm().Intrinsics.ID1.ID2`.
+  If you see a dot - double square brace - percent expression, like "OBJ . [ [ % ID % ] ]" or "OBJ . [ [ % ID1.ID2 % ] ]", replace that syntax with attribute lookup, like `OBJ.ID` or `OBJ.ID1.ID2`.
+  If a percent identifier starts with "Symbol", like "% Symbol.FIELD %", just omit the percent signs, i.e. use `Symbol.FIELD`. Rename "Symbol.match" to `Symbol.match_`.
+  To obtain the current Realm Record use `current_realm()`.
+
+  To obtain the Agent Record of the surrounding agent use `current_agent()`. This function returns `AgentRecord`; there's no need to fetch the attribute `.AgentRecord`, just use the function value.
+
+  When comparing a string with a `Terminal`, check its `value` field, that is `STRING == TERMINAL.value`. Also, when checking if a `Terminal` is a member of string collection, use `TERMINAL.value in COLLECTION`.
+  When comparing two `Terminal`s, use comparison operator: `TERMINAL1 == TERMINAL2`.
  </prompt>
 
  <prompt context="Syntax Directed Operation">
@@ -170,11 +199,9 @@ def function():
   Whenever the specification says "this production", take it as `self`. "This production" always refers to the `self` argument.
   To check if this production matches a `Production(...)` object, use `self.matches(Production(...))`.
 
-  When comparing a string with a `Terminal`, check its `value` field, that is `STRING == TERMINAL.value`. Also, when checking if a `Terminal` is a member of string collection, use `TERMINAL.value in COLLECTION`.
   When comparing a string with a `Nonterminal`, use `javascript_grammar.matches(STRING, NONTERMINAL)`.
   When comparing a `Terminal` with a `Nonterminal`, use `javascript_grammar.matches(TERMINAL.value, NONTERMINAL)`.
   When the specification says "`StringValue` of XXX is a Nonterminal('ReservedWord')", use `lexical_grammar.matches(XXX.StringValue(), Nonterminal('ReservedWord'))`.
-  When comparing two `Terminal`s, use comparison operator: `TERMINAL1 == TERMINAL2`.
   When comparing two `Nonterminal`s, use comparison operator: `NONTERMINAL1 == NONTERMINAL2`;
 
   Whenever the specification says that some non-string object X "is" a Nonterminal YYY, take it as `X.matches(Nonterminal('YYY'))`.
@@ -232,6 +259,7 @@ def function():
   To check if an object OBJ has at least one internal method, use, `any(hasattr(OBJECT, _method) for _method in all_internal_methods)`.
   The list of all internal method names is in global variable `all_internal_methods`. The list of essential internal methods is in global variable `essential_internal_methods`.
   To check if an object OBJ has a property PROP, use `PROP in OBJ`.
+  To check if an number is finite, test if it doesn't belong to `[+Infinity, -Infinity]`.
 
   To test if a VALUE is a Private Name, use `isinstance(VALUE, PrivateName)`.
   The the surrounding agent 's Agent Record can be obtained from the global variable `agent_record`.
@@ -244,6 +272,11 @@ def function():
 
   Whenever the specification says to "set SOMETHING as described in CHAPTER_NUMBER", use: `SOMETHING = as_described_in('CHAPTER_NUMBER')`. Remove whitespace from CHAPTER_NUMBER.
   When the specification says to create an instance of TYPE followed by dict-like initializer, like "TYPE { KEY1: VALUE1, KEY2: VALUE2, ... }", pass the dict initializer to the type constructor using kwargs syntax, like: `TYPE(**{KEY1:VALUE1, KEY2,VALUE2, ...})`.
+
+  When the function spec is a single line "Return `O` . WHATEVER", just return it, i.e. `return O.WHATEVER`.
+
+  When the specification says about an "error" as a type, use the type name `Error`. Similarily, "List of errors" means `List[Error]`. To check if a VALUE is an error, use `isinstance(VALUE, Error)`.
+  When the specification says about an "syntax error" as a type or "SyntaxError", use the type name `Error['SyntaxError']`.
  </prompt>
 
 </codegen>

@@ -38,7 +38,9 @@ class Codegen:
 		self.__api_key = api_key
 		
 		self.model = None
-		self.temperature = 0.06
+		self.temperature = 0.3
+		self.connect_timeout = 3.1
+		self.read_timeout = 27.1
 		
 		self.retries = 4
 		self.min_delay = 0
@@ -48,16 +50,18 @@ class Codegen:
 		self.rate_limit_up = 0.1
 		
 		self.prepend_prefix = False
-		self.extra = {}
+		#self.extra = {}
 	
 	def list_models(self):
 		url = self.__url + '/models'
+		
 		headers = {'Accept': 'application/json'}
 		if self.__api_key is not None:
 			headers['Authorization'] = "Bearer " + self.__api_key
-		response = requests.get(url, headers=headers)
+		response = requests.get(url, headers=headers, timeout=(self.connect_timeout, self.read_timeout))
 		response.raise_for_status()
-		for model in response.json()['data']:
+		j = response.json()
+		for model in j['data']:
 			yield model['id']
 	
 	def configure(self, **kwargs):
@@ -74,15 +78,15 @@ class Codegen:
 			'messages': [
 				{'role': "system", 'content': persona},
 				{'role': "user", 'content': spec}
-			] + ([{'role': "assistant", 'content':prefix}] if (prefix is not None) else [])
+			] + ([{'role': "assistant", 'prefix':True, 'content':prefix}] if (prefix is not None) else [])
 		}
-		data.update(self.extra)
+		#data.update(self.extra)
 		headers = {'Content-type': 'application/json'}
 		if self.__api_key is not None:
 			headers['Authorization'] = "Bearer " + self.__api_key
 		
 		#print(json.dumps(data))
-		response = requests.post(url, data=json.dumps(data), headers=headers)
+		response = requests.post(url, data=json.dumps(data), headers=headers, timeout=(self.connect_timeout, self.read_timeout))
 		
 		try:
 			response.raise_for_status()
@@ -160,8 +164,9 @@ if __name__ == '__main__':
 	print("model:", environ['LLM_MODEL'])
 	
 	codegen = Codegen(url=environ['LLM_API_URL'], api_key=environ['LLM_API_KEY'])
-	print(list(codegen.list_models()))
-	codegen.configure(model=environ['LLM_MODEL'], **eval(environ['LLM_CONFIG_EXTRA']))
+	codegen.configure(**eval(environ['LLM_CONFIG_EXTRA']))
+	#print(list(codegen.list_models()))
+	codegen.configure(model=environ['LLM_MODEL'])
 	
 	print()
 	print()

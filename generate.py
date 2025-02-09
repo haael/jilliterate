@@ -3,6 +3,7 @@
 
 from itertools import chain
 from pathlib import Path
+from ast import parse as ast_parse, literal_eval, unparse
 
 from tokens import *
 from specification import *
@@ -301,32 +302,54 @@ def specification_syntax_directed_operations(specification):
 				result.clear()
 
 
+max_syntax_retries = 4
+
+
 def generate_header(codegen, prompt, spec):
 	"Ask AI to generate a header, that is the prototype of a function from its spec."
 	
 	personality = prompt[""] + prompt["Prototype"]
-	result = codegen.request(personality, spec).strip()
-	print(result)
-	#raise NotImplementedError
-	func_kind, func_name, *argtypes = eval(result) # FIXME: safe eval
+	retries = max_syntax_retries
+	while retries:
+		retries -= 1
+		result = codegen.request(personality, spec, '{"__kind":').strip()
+		print(result)
+		try:
+			tree = ast_parse(result)
+			types = {}
+			for key, value in zip(tree.body[0].value.keys, tree.body[0].value.values):
+				key = literal_eval(key)
+				if key.startswith('__'):
+					value = literal_eval(value)
+				else:
+					value = unparse(value)
+				types[key] = value
+		except (SyntaxError, AttributeError, IndexError, ValueError):
+			spec += " \nDon't make syntax errors! Place quotes around strings correctly! (\"STRING\")"
+			continue
+		else:
+			break
+	else:
+		raise RuntimeError("Model makes too many syntax errors!")
+	
+	func_kind = types['__kind']
+	func_name = types['__name']
 	func_args = []
 	func_arg_types = []
 	func_arg_optional = []
+	optional = False
 	func_return_type = ''
-	for argtype in argtypes:
-		n = argtype.index(":")
-		arg = argtype[:n].strip()
-		type_ = argtype[n+1:].strip()
+	for arg, type_ in types.items():
+		if arg.startswith('__'):
+			continue
 		
 		if arg == 'return':
 			func_return_type = type_
 		else:
 			func_args.append(arg)
-			if type_.endswith('/optional'):
-				func_arg_optional.append(True)
-				type_ = type_[:-9].strip()
-			else:
-				func_arg_optional.append(False)
+			if type_.endswith('None'):
+				optional = True
+			func_arg_optional.append(optional)
 			func_arg_types.append(type_)
 	
 	return func_kind, func_name, func_args, func_arg_types, func_arg_optional, func_return_type
@@ -336,28 +359,85 @@ def generate_early_errors(codegen, prompt, spec, func_name, func_args, func_arg_
 	"Ask AI to generate Early Errors."
 	personality = prompt[""] + prompt["Algorithm"] + prompt["Syntax Directed Operation"] + prompt["Early Errors"]
 	prototype = 'def ' + func_name + '(' + ', '.join(_arg + ': ' + _type + (' = None' if _optional else '') for (_arg, _type, _optional) in zip(func_args, func_arg_types, func_arg_optional)) + ')' + ((' -> ' + func_return_type) if func_return_type else '') + ':\n\t'
-	return codegen.request(personality, spec, prototype)
+	
+	errors = []
+	retries = max_syntax_retries
+	while retries:
+		retries -= 1
+		code = codegen.request(personality, spec, prototype)
+		try:
+			ast_parse(code)
+		except SyntaxError as error:
+			errors.append(error)
+			spec += " \n\nDo not make syntax errors. Use correct indentation."
+		else:
+			return code
+	else:
+		raise ExceptionGroup("Model makes too many syntax errors!", errors)
 
 
 def generate_evaluation(codegen, prompt, spec, func_name, func_args, func_arg_types, func_arg_optional, func_return_type):
 	"Ask AI to generate Evaluation."
 	personality = prompt[""] + prompt["Algorithm"] + prompt["Syntax Directed Operation"] + prompt["Evaluation"]
 	prototype = 'def ' + func_name + '(' + ', '.join(_arg + ': ' + _type + (' = None' if _optional else '') for (_arg, _type, _optional) in zip(func_args, func_arg_types, func_arg_optional)) + ')' + ((' -> ' + func_return_type) if func_return_type else '') + ':\n\t'
-	return codegen.request(personality, spec, prototype)
+	
+	errors = []
+	retries = max_syntax_retries
+	while retries:
+		retries -= 1
+		code = codegen.request(personality, spec, prototype)
+		try:
+			ast_parse(code)
+		except SyntaxError as error:
+			errors.append(error)
+			spec += " \n\nDo not make syntax errors. Use correct indentation."
+		else:
+			return code
+	else:
+		raise ExceptionGroup("Model makes too many syntax errors!", errors)
 
 
 def generate_condition(codegen, prompt, spec, func_name, func_args, func_arg_types, func_arg_optional, func_return_type):
 	"Ask AI to generate a single subsection of a syntax-directed operation."
 	personality = prompt[""] + prompt["Algorithm"] + prompt["Syntax Directed Operation"]
 	prototype = 'def ' + func_name + '(' + ', '.join(_arg + ': ' + _type + (' = None' if _optional else '') for (_arg, _type, _optional) in zip(func_args, func_arg_types, func_arg_optional)) + ')' + ((' -> ' + func_return_type) if func_return_type else '') + ':\n\t'
-	return codegen.request(personality, spec, prototype)
+	
+	errors = []
+	retries = max_syntax_retries
+	while retries:
+		retries -= 1
+		code = codegen.request(personality, spec, prototype)
+		try:
+			ast_parse(code)
+		except SyntaxError as error:
+			errors.append(error)
+			spec += " \n\nDo not make syntax errors. Use correct indentation."
+		else:
+			return code
+	else:
+		raise ExceptionGroup("Model makes too many syntax errors!", errors)
 
 
 def generate_algorithm(codegen, prompt, spec, func_name, func_args, func_arg_types, func_arg_optional, func_return_type):
 	"Ask AI to generate a single abstract operation."
 	personality = prompt[""] + prompt["Algorithm"] + prompt["Abstract Operation"]
 	prototype = 'def ' + func_name + '(' + ', '.join(_arg + ': ' + _type + (' = None' if _optional else '') for (_arg, _type, _optional) in zip(func_args, func_arg_types, func_arg_optional)) + ')' + ((' -> ' + func_return_type) if func_return_type else '') + ':\n\t'
-	return codegen.request(personality, spec, prototype)
+	
+	errors = []
+	retries = max_syntax_retries
+	while retries:
+		retries -= 1
+		code = codegen.request(personality, spec, prototype)
+		try:
+			ast_parse(code)
+		except SyntaxError as error:
+			errors.append(error)
+			print(code)
+			spec += " \n\nDo not make syntax errors. Use correct indentation."
+		else:
+			return code
+	else:
+		raise ExceptionGroup("Model makes too many syntax errors!", errors)
 
 
 def tee_files(*filenames, print_=True):
@@ -537,8 +617,9 @@ if __name__ == '__main__':
 	print("model:", environ['LLM_MODEL'])
 	
 	codegen = Codegen(url=environ['LLM_API_URL'], api_key=environ['LLM_API_KEY'])
-	print(list(codegen.list_models()))
-	codegen.configure(model=environ['LLM_MODEL'], **eval(environ['LLM_CONFIG_EXTRA']), rate_limit=4, min_delay=3, rate_limit_down=0.05, rate_limit_up=0.75)
+	codegen.configure(**eval(environ['LLM_CONFIG_EXTRA']))
+	#print(list(codegen.list_models()))
+	codegen.configure(model=environ['LLM_MODEL'], rate_limit=4, min_delay=3, rate_limit_down=0.05, rate_limit_up=0.75)
 	
 	dest_dir = Path('gencode')
 	dest_dir.mkdir(exist_ok=True)
