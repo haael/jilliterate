@@ -5,6 +5,7 @@ import requests
 import json
 from time import sleep
 from random import choice, randint
+from textwrap import dedent
 
 
 class MockCodegen:
@@ -49,10 +50,17 @@ class Codegen:
 		self.rate_limit_down = 0.01
 		self.rate_limit_up = 0.1
 		
+		self.supports_listing = True
 		self.prepend_prefix = False
+		self.skip_prefix_param = False
+		self.replace_escapes = False
+		self.dedent = False
 		#self.extra = {}
 	
 	def list_models(self):
+		if not self.supports_listing:
+			return
+		
 		url = self.__url + '/models'
 		
 		headers = {'Accept': 'application/json'}
@@ -75,7 +83,7 @@ class Codegen:
 
 		if prefix is not None:
 			assistant = {'role': "assistant"}
-			if not self.prepend_prefix:
+			if not self.skip_prefix_param:
 				assistant['prefix'] = True
 			assistant['content'] = prefix
 		else:
@@ -159,9 +167,18 @@ class Codegen:
 				else:
 					result = response
 				
+				#result = result.lstrip()
+				
 				if (prefix is not None) and self.prepend_prefix:
 					result = prefix + result
-				return result.replace('\\_', '_')
+				
+				if self.replace_escapes:
+					result = result.replace('\\_', '_')
+				
+				if self.dedent:
+					result = dedent(result)
+				
+				return result
 		
 		raise ExceptionGroup("All retries failed.", exceptions)
 
@@ -181,14 +198,14 @@ if __name__ == '__main__':
 	print()
 	print("Test 0: test")
 	print()
-	result = codegen.request("This is a test.", "Print 'hello void'.", "h")
+	result = codegen.request("This is a test.", "Generate this string: 'hello void' (nothing else).", "'h")
 	print(result)
 	print()
 	
 	personality = """
 		You are a code generator. You print functions in Python language, as specified by requirements. Print only blocks of code.
 		Do not chat outside code blocks. Do not provide explanations nor usage examples. Keep identifiers as they are, do not change case or convert to snake case, but append underscore if the identifier is a reserved word.
-		Use tabulation for indent.
+		Use the tab character for indentation.
 	"""
 	
 	print()

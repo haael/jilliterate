@@ -171,10 +171,10 @@ def render_scattered_sdo(node, path, index, **kwargs):
 				if prevkind != '<grammar>':
 					if prevkind != None:
 						if sdo:
-							yield ""
-							yield "Otherwise (`self` does not match the Production above) return `NotImplemented`."
+							#yield ""
+							yield "In other case (this production does not match any of the Productions above) return `NotImplemented` at the end of the function."
 						yield None
-					yield "If this production matches " + line
+					yield "In case this production matches " + line
 				else:
 					yield " or this production matches " + line
 				
@@ -182,7 +182,7 @@ def render_scattered_sdo(node, path, index, **kwargs):
 					sdo = True
 			elif kind == '<algorithm>' or (kind == '<paragraph>' and not header):
 				if prevkind == '<grammar>':
-					yield "then:"
+					yield " perform the following steps:"
 				idx = idx[1:]
 				yield " " * len(idx) + "(" + ".".join(str(_d + 1) for _d in idx) + ".) " + line
 			#elif kind == '<paragraph>':
@@ -193,8 +193,8 @@ def render_scattered_sdo(node, path, index, **kwargs):
 			yield line
 		
 		if sdo:
-			yield ""
-			yield "Otherwise (`self` does not match the Production above) return `NotImplemented`."
+			#yield ""
+			yield "In other case (this production does not match any of the Productions above) return `NotImplemented` at the end of the function."
 		yield None
 	
 	else:
@@ -325,6 +325,7 @@ def generate_header(codegen, prompt, spec):
 					value = unparse(value)
 				types[key] = value
 		except (SyntaxError, AttributeError, IndexError, ValueError):
+			print("Syntax error!")
 			spec += " \nDon't make syntax errors! Place quotes around strings correctly! (\"STRING\")"
 			continue
 		else:
@@ -506,7 +507,7 @@ def compile_early_errors(specification, codegen, prompt):
 		n += 1
 		name = '_early_errors_' + roman(n).lower()
 		yield generate_early_errors(codegen, prompt, spec, name, ('self', 'goal'), ('Self', 'Nonterminal'), (False, False), '')
-		final_function.append(f"\tif (result := {name}(self, goal)) is not NotImplemented: return")
+		final_function.append(f"\tif {name}(self, goal) is not NotImplemented: return")
 		yield ""
 		yield ""
 	yield from final_function
