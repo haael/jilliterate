@@ -84,7 +84,7 @@ I see similar projects implementing applications that have a formal specificatio
 If you wish to contribute, try the following:
 
 1. Find more LLM platforms and test if they work. Add them to `llm_platforms.sh`.
-2. Modify the prompt, especially to fix syntax errors ([[prompt.xml](https://github.com/haael/jilliterate/blob/master/prompt.xml)]).
+2. Modify the prompt, especially to fix syntax errors in the generated code ([[prompt.xml](https://github.com/haael/jilliterate/blob/master/prompt.xml)]).
 3. Try fine-tuning the model.
 4. Implement EBNF grammar parser with all necessary features needed by Javascript. Try doing it by constructing a prompt for AI.
 5. Implement all the backend structures referenced by the ECMA grammar by feeding pieces of the spec into AI.
