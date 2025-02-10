@@ -19,7 +19,7 @@
 #export LLM_CONFIG_EXTRA='{}'
 
 
-## Github Copilot
+## Github Copilot, codestral model
 
 #export LLM_API_URL=https://models.inference.ai.azure.com/v1
 #export LLM_API_KEY=

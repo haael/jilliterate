@@ -72,13 +72,22 @@ class Codegen:
 	
 	def raw_request(self, persona, spec, prefix=None):
 		url = self.__url + '/chat/completions'
+
+		if prefix is not None:
+			assistant = {'role': "assistant"}
+			if not self.prepend_prefix:
+				assistant['prefix'] = True
+			assistant['content'] = prefix
+		else:
+			assistant = None
+		
 		data = {
 			'model': self.model,
 			'temperature': self.temperature,
 			'messages': [
 				{'role': "system", 'content': persona},
 				{'role': "user", 'content': spec}
-			] + ([{'role': "assistant", 'prefix':True, 'content':prefix}] if (prefix is not None) else [])
+			] + ([assistant] if assistant is not None else [])
 		}
 		#data.update(self.extra)
 		headers = {'Content-type': 'application/json'}
@@ -152,7 +161,7 @@ class Codegen:
 				
 				if (prefix is not None) and self.prepend_prefix:
 					result = prefix + result
-				return result
+				return result.replace('\\_', '_')
 		
 		raise ExceptionGroup("All retries failed.", exceptions)
 
@@ -165,7 +174,7 @@ if __name__ == '__main__':
 	
 	codegen = Codegen(url=environ['LLM_API_URL'], api_key=environ['LLM_API_KEY'])
 	codegen.configure(**eval(environ['LLM_CONFIG_EXTRA']))
-	#print(list(codegen.list_models()))
+	print(list(codegen.list_models()))
 	codegen.configure(model=environ['LLM_MODEL'])
 	
 	print()
