@@ -39,7 +39,7 @@ class Codegen:
 		self.__api_key = api_key
 		
 		self.model = None
-		self.temperature = 0.3
+		self.temperature = 0.1
 		self.connect_timeout = 3.1
 		self.read_timeout = 27.1
 		

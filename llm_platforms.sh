@@ -3,20 +3,20 @@
 # DO NOT PUT YOUR API KEYS HERE. Put them in `my_platform.sh` and make sure that file is in `.gitignore`.
 
 
-## Mistral, the preferred model.
-
-#export LLM_API_URL=https://api.mistral.ai/v1
-#export LLM_API_KEY=
-#export LLM_MODEL=codestral-latest
-#export LLM_CONFIG_EXTRA='{}'
-
-
 ## Mistral, codestral endpoint
 
 #export LLM_API_URL=https://codestral.mistral.ai/v1
 #export LLM_API_KEY=
 #export LLM_MODEL=codestral-latest
 #export LLM_CONFIG_EXTRA='{"supports_listing":False}'
+
+
+## Mistral, general endpoint
+
+#export LLM_API_URL=https://api.mistral.ai/v1
+#export LLM_API_KEY=
+#export LLM_MODEL=codestral-latest
+#export LLM_CONFIG_EXTRA='{}'
 
 
 ## Github Copilot, codestral model

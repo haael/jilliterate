@@ -172,7 +172,7 @@ def render_scattered_sdo(node, path, index, **kwargs):
 					if prevkind != None:
 						if sdo:
 							#yield ""
-							yield "In other case (this production does not match any of the Productions above) return `NotImplemented` at the end of the function."
+							yield "Otherwise, in case this production does not match any of the Productions at the beginning, return `NotImplemented` at the end of the function."
 						yield None
 					yield "In case this production matches " + line
 				else:
@@ -182,7 +182,7 @@ def render_scattered_sdo(node, path, index, **kwargs):
 					sdo = True
 			elif kind == '<algorithm>' or (kind == '<paragraph>' and not header):
 				if prevkind == '<grammar>':
-					yield " perform the following steps:"
+					yield "  perform the following steps:"
 				idx = idx[1:]
 				yield " " * len(idx) + "(" + ".".join(str(_d + 1) for _d in idx) + ".) " + line
 			#elif kind == '<paragraph>':
@@ -194,7 +194,7 @@ def render_scattered_sdo(node, path, index, **kwargs):
 		
 		if sdo:
 			#yield ""
-			yield "In other case (this production does not match any of the Productions above) return `NotImplemented` at the end of the function."
+			yield "Otherwise, in case this production does not match any of the Productions at the beginning, return `NotImplemented` at the end of the function."
 		yield None
 	
 	else:
@@ -400,7 +400,7 @@ def generate_evaluation(codegen, prompt, spec, func_name, func_args, func_arg_ty
 
 def generate_condition(codegen, prompt, spec, func_name, func_args, func_arg_types, func_arg_optional, func_return_type):
 	"Ask AI to generate a single subsection of a syntax-directed operation."
-	personality = prompt[""] + prompt["Algorithm"] + prompt["Syntax Directed Operation"]
+	personality = prompt[""] + prompt["Algorithm"] + prompt["Syntax Directed Operation"] + prompt["Abstract Operation"]
 	prototype = 'def ' + func_name + '(' + ', '.join(_arg + ': ' + _type + (' = None' if _optional else '') for (_arg, _type, _optional) in zip(func_args, func_arg_types, func_arg_optional)) + ')' + ((' -> ' + func_return_type) if func_return_type else '') + ':\n\t'
 	
 	errors = []

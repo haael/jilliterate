@@ -11,7 +11,7 @@
   Use tabulation character ("\t") for indentation. Do not start a function with double tab; single one will suffice.
 ```
 def function():
-	pass
+	return
 ```
   Avoid calling the same function twice. Better save result to temporary variable and reuse.
   When there is a condition with multiple alternatives, join them into one big test using `or`, but put each subcondition into a separate line.
@@ -50,7 +50,7 @@ def function():
    If the function is of kind "concrete method", there is special first argument `"VARIABLE":Self` where the argument name VARIABLE is provided in the spec.
    Next elements are arguments with types, in the format `ARGUMENT: TYPE`. ARGUMENT is a string and TYPE is a valid Python type identifier.
     If ARGUMENT is a Python reserved word, a Python built-in function name or one of standard Python type names, append underscore.
-    I.e. convert `"len":TYPE` to `"len_":TYPE`, `"str":TYPE` to `"str_":TYPE`, `"min":TYPE` to `"min_":TYPE`, `"type":TYPE` to `"type_":TYPE`, etc.
+    I.e. convert `"len":TYPE` to `"len_":TYPE`, `"str":TYPE` to `"str_":TYPE`, `"min":TYPE` to `"min_":TYPE`, `"type":TYPE` to `"type_":TYPE`, `"set":TYPE` to `"set_":TYPE`, etc.
    The return type, if present, is provided in the last element as: `"return": RETURN_TYPE`.
   I.e.: `{"__kind":"FUNCTION_KIND", "__name":"FUNCTION_NAME", "ARG1":TYPE1, "ARG2":TYPE2, ..., "return":RETURN_TYPE}`.
 
@@ -92,6 +92,7 @@ def function():
   When the spec uses type name "string" or "str", use `String`.
   When the spec uses type name "list" or "sequence", use `List`.
   When the spec uses type name "object", use `Object`.
+  When the spec uses type name "set", use `Set`.
   When the spec uses type name "ordinary object", use `OrdinaryObject`.
   When the spec says the function returns "null", use type `type(Null)`.
   When the spec says the function returns "undefined", use type `type(Undefined)`.
@@ -102,6 +103,7 @@ def function():
   When the spec says "any value", use type `object`.
   When the spec says "SOME_TYPE except OTHER_TYPE", use a special "Except" type function like that: `SOME_TYPE - Except(OTHER_TYPE)`.
   When the spec says "property key" or "property keys" it means the type `PropertyKey`.
+  When the spec says "0 or 1" use `ZeroOrOne`.
 
   If none of the rules above apply and a type spec ends with "Record", include that "Record" as part of the type name. I.e. "Some Thing Record" should be `SomeThingRecord`.
   If none of the rules above apply and a multi-word type description ends with "Object", remove the final word "Object" from the type name. I.e. "Some Thing Object" should be just `SomeThing` (skipping "Object").
@@ -109,8 +111,6 @@ def function():
   Example:
    If you receive the input: "The syntax - directed operation Evaluation takes no arguments and returns a Completion Record ."
    respond with: `{"__kind":"syntax-directed operation", "__name":"Evaluation", "self":Self, "return": CompletionRecord}`
-
-  Print the tuple.
  </prompt>
 
  <prompt context="Algorithm">
@@ -140,7 +140,8 @@ def function():
   When using a value in a test "if VALUE is false ...", negate the value: `if not VALUE: ...`.
 
   Whenever the specification says "VALUE is a TYPE" or "VALUE is an TYPE" it is a type check, so use `isinstance(VALUE, TYPE)`, except when TYPE is a Nonterminal.
-  When testing for types, like `Bool`, `String`, `Number`, `BigInt`, `List`, `Array`, `Object`, 'ECMAScriptFunctionObject`  etc. using the construction "VALUE is a TYPE", keep the original type name and do not change it to Python equivalent, i.e. `isinstance(VALUE, TYPE)`.
+  When testing for types, like `Bool`, `String`, `Number`, `BigInt`, `List`, `Set`, `Array`, `Object`, 'ECMAScriptFunctionObject`  etc. using the construction "VALUE is a TYPE", keep the original type name and do not change it to Python equivalent, i.e. `isinstance(VALUE, TYPE)`.
+  When the spec says "list of TYPE", use `List[TYPE]`.
   Whenever the specification says to throw an exception SOME_ERROR, return `CompletionRecord(Type=Enum_['throw'], Value='SOME_ERROR')`. Convert SOME_ERROR string to camel case, i.e. when SOME_ERROR is "Typeerror" convert it to "TypeError". SOME_ERROR is a string, so put it in quotes.
   Whenever the specification line starts with "Assert :" insert `assert CONDITION` where CONDITION is Python code. Interpret the rest of the line after "Assert :" as the condition to check.
   To check if a VALUE is a "TYPE completion", test if its `Type` attribute is equal to `Enum_['TYPE']`.
@@ -200,8 +201,30 @@ def function():
 
  <prompt context="Syntax Directed Operation">
   <!-- Prompt present in all requests to make a syntax-directed operation. SDOs are methods of the class `ParseNode` and therefore always have `self` argument. -->
-  This syntax-directed operation begins with a match against one or more Productions. In the case `self` matches any of the Productions, some steps are performed.
-  In the other case (`self` does not match any of the Productions), no steps are performed and the function returns `NotImplemented`.
+  This is a syntax-directed operation. It begins with a match of `self` against one or more Production constants.
+  If `self` matches any of the Productions, perform the listed steps that follow.
+  If none of the Productions are matched, return `NotImplemented`.
+
+  Insert a line with the comment "# Testing for match..." before the "if" block.
+  Insert a line with the comment "# Match found" inside the "if" block.
+
+  So the whole function should follow the pattern:
+```
+def METHOD_NAME(self:Self, ARGS):
+	# Testing for match...
+
+	if self.matches(Production(SOMETHING1)) or \
+		self.matches(Production(SOMETHING2)):
+
+		# Match found
+
+		PERFORM_STEP_1
+		PERFORM_STEP_2
+
+		...
+	else:
+		return NotImplemented
+```
 
   Whenever the specification says "this production", take it as `self`. "This production" always refers to the `self` argument.
   To check if this production matches a `Production(...)` object, use `self.matches(Production(...))`.
@@ -267,7 +290,6 @@ def function():
   To check if an number is finite, test if it doesn't belong to `[+Infinity, -Infinity]`.
 
   To test if a VALUE is a Private Name, use `isinstance(VALUE, PrivateName)`.
-  The the surrounding agent 's Agent Record can be obtained from the global variable `agent_record`.
   `GlobalSymbolRegistry` is a global variable.
 
   To create an accessor property use the constructor with attribute names as arguments. The default attribute values are provided here: `AccessorProperty(Get=Undefined, Set=Undefined, Enumerable=False, Configurable=False)`.
@@ -277,17 +299,41 @@ def function():
 
   Whenever the specification says to "set SOMETHING as described in CHAPTER_NUMBER", use: `SOMETHING = as_described_in('CHAPTER_NUMBER')`. Remove whitespace from CHAPTER_NUMBER.
   When the specification says to create an instance of TYPE followed by dict-like initializer, like "TYPE { KEY1: VALUE1, KEY2: VALUE2, ... }", pass the dict initializer to the type constructor using kwargs syntax, like: `TYPE(**{KEY1:VALUE1, KEY2,VALUE2, ...})`.
+  I.e. when the spec says to "return the Record { `Job` : `job` , `Realm` : `handlerRealm` }", use `return Record(**{'Job': job, 'Realm': handlerRealm})`.
 
   When the specification says about an "error" as a type, use the type name `Error`. Similarily, "List of errors" means `List[Error]`. To check if a VALUE is an error, use `isinstance(VALUE, Error)`.
   When the specification says about an "syntax error" as a type or "SyntaxError", use the type name `Error['SyntaxError']`.
 
   Do not use `current_agent().AgentRecord`; just use `current_agent()` instead. The function `current_agent()` returns the Agent Record.
 
-  If the function spec is only one step "(1.) Return `O` . ATTRIBUTE", then just return this attribute: `return O.ATTRIBUTE`.
+  If the function spec consists of only one operation, to return an attribute of an object, "(1.) Return `O` . `Extensible`", then just return this attribute: `return O.Extensible`.
 
-  When creating a closure or another capturing function-like object with a specified type (like "MatcherContinuation", "JobAbstractClosure", "AbstractClosure") add that type as a decorator over that closure. If no type is specified, add a decorator `@AbstractClosure`.
-  When creating a closure or another capturing function-like object without a specified name i.e. "Return a new Matcher", give it a name by prepending underscore to the type name i.e. `def _Matcher` and apply a decorator as above.
-  When the spec says that a closure captures some variables, add them as `nonlocal` to the created function.
+  If the function spec consists of only one operation, to return a result of function "ValidateAndApplyPropertyDescriptor" on some arguments, just call it and return the result:
+   "(1.) Return &lt;function&gt; `ValidateAndApplyPropertyDescriptor` ( `Undefined` , "" , `Extensible` , `Desc` , `Current` ) ."
+   `return ValidateAndApplyPropertyDescriptor(Undefined, "", Extensible, Desc, Current)`
+
+  The spec may define an inner function (also called a "closure") using syntax: "Let `CLOSURE_NAME` be a new CLOSURE_TYPE with ARGUMENTS that captures NONLOCALS and performs the following steps when called :".
+  When creating an inner function with a specified type (like "MatcherContinuation", "JobAbstractClosure", "AbstractClosure") add that type as a decorator over that closure. If no type is specified, add a decorator `@AbstractClosure`.
+  When returning an inner function without a specified name i.e. "Return a new Matcher", give it a name by prepending underscore to the type name and apply a decorator as above (i.e. `@Matcher\ndef _Matcher`). Then return the created closure (`return _Matcher`).
+  But if the spec provides a name, like "Let `closure` be an Abstract Closure ..." then use that name.
+  When the spec says that an inner function "captures" some variables of the host function, add them as `nonlocal` to the inner function. Make sure that those identifiers appear as variables in the host function.
+   I.e. "Let `setterClosure` be a new Abstract Closure with parameters ( `value` ) that captures `name` and `env` ...", translates to:
+```
+	name = ?
+	env = ?
+	
+	# Closure definition
+	@AbstractClosure
+	def setterClosure(value):
+		nonlocal name, env
+		...
+	# Use the defined closure under name `setterClosure`
+	
+	setterClosure
+```
+  Normal (non-inner) functions never have a `nonlocal` clause.
+
+  In order to assert if function "`IsPropertyReference` ( `V` )" is true, use `assert IsPropertyReference(V)`.
  </prompt>
 
 </codegen>
