@@ -18,22 +18,23 @@ def function():
   Prefer equality operator `==` over `is`. Use `is` only against `None` and `NotImplemented`.
 
   If the specification uses variable or argument name that is one of: Python built-in function name, standard Python type name or Python reserved word, append an underscode in the generated code.
-  I.e. rename variable `list`, to `list_`. Same applies to attributes, i.e. rename "OBJ . list" to `OBJ.list_`.
-  Rename variable or attribute:
-   `list` to `list_`;
-   `object` to `object_`;
-   `input` to `input_`;
-   `global` to `global_`;
-   `match` to `match_`;
-   `len` to `len_`;
-   `exec` to `exec_`;
-   `set` to `set_`;
-   `map` to `map_`;
-   `next` to `next_`;
-   `min` to `min_`;
-   `max` to `max_`;
-   `str` to `str_`;
-   `type` to `type_`.
+  I.e. rename variable `list`, to `list_`. Same applies to attributes, i.e. rename "OBJ . list" to `OBJ.list_`. Function names and method names should not be renamed.
+  Rename the following variables or attributes (but not functions or methods):
+   Rename variable or attribute `list` to `list_`.
+   Rename variable or attribute `object` to `object_`.
+   Rename variable or attribute `input` to `input_`.
+   Rename variable or attribute `global` to `global_`.
+   Rename variable or attribute `match` to `match_`.
+   Rename variable or attribute `len` to `len_`.
+   Rename variable or attribute `exec` to `exec_`.
+   Rename variable or attribute `set` to `set_`.
+   Rename variable or attribute `map` to `map_`.
+   Rename variable or attribute `next` to `next_`.
+   Rename variable or attribute `min` to `min_`.
+   Rename variable or attribute `max` to `max_`.
+   Rename variable or attribute `str` to `str_`.
+   Rename variable or attribute `type` to `type_`.
+  However function `min` should stay as `min`.
 
   Do not consult any external resources for code generation. Make code based on the provided specification only.
  </prompt>
@@ -48,9 +49,9 @@ def function():
    The next element is the function name (a string) `"__name":FUNCTION_NAME, as provided in the spec. If the provided name contains a slash, like "AAAA / BBBB", connect it with underscore: `AAAA_BBBB`.
    If the function is of kind "syntax-directed operation", there is special first argument `"self":Self`.
    If the function is of kind "concrete method", there is special first argument `"VARIABLE":Self` where the argument name VARIABLE is provided in the spec.
-   Next elements are arguments with types, in the format `ARGUMENT: TYPE`. ARGUMENT is a string and TYPE is a valid Python type identifier.
+   Next elements are arguments with types, in the format `ARGUMENT: TYPE`. ARGUMENT is a string and TYPE is a valid Python type identifier. Note that TYPE is not a string and shouldn't be in quotes.
     If ARGUMENT is a Python reserved word, a Python built-in function name or one of standard Python type names, append underscore.
-    I.e. convert `"len":TYPE` to `"len_":TYPE`, `"str":TYPE` to `"str_":TYPE`, `"min":TYPE` to `"min_":TYPE`, `"type":TYPE` to `"type_":TYPE`, `"set":TYPE` to `"set_":TYPE`, etc.
+    I.e. convert `"len":TYPE` to `"len_":TYPE`, `"str":TYPE` to `"str_":TYPE`, `"min":TYPE` to `"min_":TYPE`, `"type":TYPE` to `"type_":TYPE`, `"set":TYPE` to `"set_":TYPE`, `"match":TYPE` to `"match_":TYPE`, etc.
    The return type, if present, is provided in the last element as: `"return": RETURN_TYPE`.
   I.e.: `{"__kind":"FUNCTION_KIND", "__name":"FUNCTION_NAME", "ARG1":TYPE1, "ARG2":TYPE2, ..., "return":RETURN_TYPE}`.
 
@@ -67,19 +68,21 @@ def function():
   If some type can not be determined, omit it, providing just the argument name.
   If the spec explicitly says the argument is optional (like "optional argument"), make the whole type an union with `None`. So if the spes says the optional argument has some type, like `"ARG":TYPE`, make it `"ARG":(TYPE) | None`.
   When one argument is optional, all subsequent arguments are optional too, so add the `None` alternative to all arguments following the one marked as optional, except "return" type. (Preceding arguments are unaffected.)
-  Example: "optional argument `env` ( an Environment Record or `Undefined` )" becomes `"env":(EnvironmentRecord | type(Undefined)) | None`.
+  Example: "optional argument `env` ( an Environment Record or `Undefined` )" becomes `"env":(EnvironmentRecord | UndefinedType) | None`.
   Note: `Null` or `Undefined` argument types are not enough to consider the argument optional. The spec must explicitly say "optional argument", otherwise the argument is mandatory.
 
   If the spec says about many possible types (like "TYPE1 or TYPE2"), connect them into union using the `|` operator, like: `TYPE1 | TYPE2`.
   If the spec says "List of TYPEs" where the second type is plural, it means `List[TYPE]`.
 
-  A type of form "Nonterminal(XXX) Parse Node" should be converted to a type `ParseNode[Nonterminal(XXX)]`.
+  When the spec says "Nonterminal(XXX)" convert it to `Nonterminal[XXX]`.
+  When the spec mentions alternative of nonterminals, like "Nonterminal(AAA) or Nonterminal(BBB)" convert it to `Nonterminal[AAA, BBB]`. This rule does not affect `Enum_` which should be rendered as union using "|" operator.
+  A type of form "Nonterminal(XXX) Parse Node" should be converted to a type `ParseNode[Nonterminal[XXX]]`.
 
   A "completion" is a type `CompletionRecord`. Additional qualifiers possible on a completion are:
-   "normal completion" is `CompletionRecord`
-   "abrupt completion" is `CompletionRecord.type_('abrupt')`
-   "XXX completion" except "normal" is `CompletionRecord.type_('XXX')`
-   "normal completion containing YYY" is CompletionRecord[YYY]`
+   "normal completion" is `CompletionRecord['normal']`
+   "abrupt completion" is `CompletionRecord['abrupt']`
+   "XXX completion" is `CompletionRecord['XXX']`
+   "normal completion containing YYY" is CompletionRecord['normal', YYY]`
 
   A "record" type is a class `Record` with additional field specification. Add those fields as a dict in square braces. I.e. when the spec says "Record with fields `AAA` (a TYPE1) and `BBB` (a TYPE2)", use: `Record[{'AAA':TYPE1, 'BBB':Type2}]`
 
@@ -93,17 +96,18 @@ def function():
   When the spec uses type name "list" or "sequence", use `List`.
   When the spec uses type name "object", use `Object`.
   When the spec uses type name "set", use `Set`.
+  When the spec uses type name "array", use `Array`.
   When the spec uses type name "ordinary object", use `OrdinaryObject`.
-  When the spec says the function returns "null", use type `type(Null)`.
-  When the spec says the function returns "undefined", use type `type(Undefined)`.
-  When the spec says the function returns "∞", use type `type(Infinity)`.
+  When the spec says the function returns "null", use type `NullType`.
+  When the spec says the function returns "undefined", use type `UndefinedType`.
+  When the spec says the function returns "∞", use type `InfinityType`.
   When the spec says "code point", use type `CodePoint`.
   When the spec says "time value", use type `TimeValue`.
   When the spec says "RegExp Record", use type `RegExp`.
-  When the spec says "any value", use type `object`.
-  When the spec says "SOME_TYPE except OTHER_TYPE", use a special "Except" type function like that: `SOME_TYPE - Except(OTHER_TYPE)`.
+  When the spec says "any value", use type `AnyValue`.
+  When the spec says "SOME_TYPE except OTHER_TYPE", use a special "Except" type function like that: `SOME_TYPE - OTHER_TYPE`.
   When the spec says "property key" or "property keys" it means the type `PropertyKey`.
-  When the spec says "0 or 1" use `ZeroOrOne`.
+  When the spec says "0 or 1" use `Bit`.
 
   If none of the rules above apply and a type spec ends with "Record", include that "Record" as part of the type name. I.e. "Some Thing Record" should be `SomeThingRecord`.
   If none of the rules above apply and a multi-word type description ends with "Object", remove the final word "Object" from the type name. I.e. "Some Thing Object" should be just `SomeThing` (skipping "Object").
@@ -129,9 +133,9 @@ def function():
    "true" to `True`;
    "false" to `False`;
    "+ ∞" to `+Infinity`;
-   "- ∞" to `-Infinity`.
+   "- ∞" and  "_ ∞" to `-Infinity`.
   Use the constant `Null` when documentation says "null".
-  The special expression "+ 0 ( 𝔽 )" means `+Zero` and the special expression "- 0 ( 𝔽 )" means `-Zero`, but if "0" appears in other context just use literal `0`.
+  The special expression "+ 0 ( 𝔽 )" means `+Zero` and the special expression "- 0 ( 𝔽 )" and "_ 0" means `-Zero`, but if "0" appears in other context just use literal `0`.
   The constant "NaN" is just `NaN`.
 
   When testing if "`VARIABLE` is undefined", use equality operator: `VARIABLE == Undefined`.
@@ -142,7 +146,6 @@ def function():
   Whenever the specification says "VALUE is a TYPE" or "VALUE is an TYPE" it is a type check, so use `isinstance(VALUE, TYPE)`, except when TYPE is a Nonterminal.
   When testing for types, like `Bool`, `String`, `Number`, `BigInt`, `List`, `Set`, `Array`, `Object`, 'ECMAScriptFunctionObject`  etc. using the construction "VALUE is a TYPE", keep the original type name and do not change it to Python equivalent, i.e. `isinstance(VALUE, TYPE)`.
   When the spec says "list of TYPE", use `List[TYPE]`.
-  Whenever the specification says to throw an exception SOME_ERROR, return `CompletionRecord(Type=Enum_['throw'], Value='SOME_ERROR')`. Convert SOME_ERROR string to camel case, i.e. when SOME_ERROR is "Typeerror" convert it to "TypeError". SOME_ERROR is a string, so put it in quotes.
   Whenever the specification line starts with "Assert :" insert `assert CONDITION` where CONDITION is Python code. Interpret the rest of the line after "Assert :" as the condition to check.
   To check if a VALUE is a "TYPE completion", test if its `Type` attribute is equal to `Enum_['TYPE']`.
   To check if a VALUE is an "abrupt completion", test if its `Type` attribute is not equal to `Enum_['normal']`.
@@ -201,6 +204,11 @@ def function():
 
  <prompt context="Syntax Directed Operation">
   <!-- Prompt present in all requests to make a syntax-directed operation. SDOs are methods of the class `ParseNode` and therefore always have `self` argument. -->
+  <line context="First match">In case this production matches </line>
+  <line context="Next match"> or this production matches </line>
+  <line context="Match found">  perform the following steps:</line>
+  <line context="No match">Otherwise, in case this production does not match any of the Productions at the beginning, return `NotImplemented` at the end of the function.</line>
+
   This is a syntax-directed operation. It begins with a match of `self` against one or more Production constants.
   If `self` matches any of the Productions, perform the listed steps that follow.
   If none of the Productions are matched, return `NotImplemented`.
@@ -279,15 +287,19 @@ def METHOD_NAME(self:Self, ARGS):
  </prompt>
 
  <prompt context="Abstract Operation">
-  <!-- Prompt present in all requests to make an abstract operation. -->
-  To test if a number is a "NaN", use `number is NaN`.
+  <!-- Prompt present in all requests to make an abstract operation. Also present in syntax-directed operations except Evaluation and Early Errors. -->
+  To test if a number is a "NaN", use `number == NaN`.
   To test if a number is (plus or minus) "∞", use `number is +Infinity` or `number is -Infinity`.
   To test if a number is a "+ 0 ( 𝔽 )" or "- 0 ( 𝔽 )", use `number is +Zero` or `number is -Zero`.
   To check if an object OBJ has internal method METHOD, use `hasattr(OBJECT, 'METHOD')`.
   To check if an object OBJ has at least one internal method, use, `any(hasattr(OBJECT, _method) for _method in all_internal_methods)`.
   The list of all internal method names is in global variable `all_internal_methods`. The list of essential internal methods is in global variable `essential_internal_methods`.
+  To check if an object OBJ has a ATTR field, use `hasattr(OBJ, 'ATTR')`.
   To check if an object OBJ has a property PROP, use `PROP in OBJ`.
-  To check if an number is finite, test if it doesn't belong to `[+Infinity, -Infinity]`.
+  Whenever the specification says "`number` is finite", use `number not in [+Infinity, -Infinity]`. Notice that if number IS finite, it does NOT belong to infinity list.
+  Whenever the specification says "`number` is not finite", use `number in [+Infinity, -Infinity]`. Notice that if number is NOT finite, it DOES belong to infinity list.
+  Whenever the specification says "`number` is infinite", use `number in [+Infinity, -Infinity]`. Notice that if number IS infinite, it DOES belong to infinity list.
+  To check in a value is Null, use `value == Null`. To check if value is not Null, use `value != Null`.
 
   To test if a VALUE is a Private Name, use `isinstance(VALUE, PrivateName)`.
   `GlobalSymbolRegistry` is a global variable.
@@ -299,7 +311,7 @@ def METHOD_NAME(self:Self, ARGS):
 
   Whenever the specification says to "set SOMETHING as described in CHAPTER_NUMBER", use: `SOMETHING = as_described_in('CHAPTER_NUMBER')`. Remove whitespace from CHAPTER_NUMBER.
   When the specification says to create an instance of TYPE followed by dict-like initializer, like "TYPE { KEY1: VALUE1, KEY2: VALUE2, ... }", pass the dict initializer to the type constructor using kwargs syntax, like: `TYPE(**{KEY1:VALUE1, KEY2,VALUE2, ...})`.
-  I.e. when the spec says to "return the Record { `Job` : `job` , `Realm` : `handlerRealm` }", use `return Record(**{'Job': job, 'Realm': handlerRealm})`.
+  I.e. when the spec says to "return the Record { `Job` : `job` , `Realm` : `handlerRealm` }", use `return Record(**{'Job': job, 'Realm': handlerRealm})` or alternatively `return Record(Job=job, Realm=handlerRealm)`.
 
   When the specification says about an "error" as a type, use the type name `Error`. Similarily, "List of errors" means `List[Error]`. To check if a VALUE is an error, use `isinstance(VALUE, Error)`.
   When the specification says about an "syntax error" as a type or "SyntaxError", use the type name `Error['SyntaxError']`.
@@ -331,9 +343,16 @@ def METHOD_NAME(self:Self, ARGS):
 	
 	setterClosure
 ```
-  Normal (non-inner) functions never have a `nonlocal` clause.
+  Normal (non-inner) functions never have a `nonlocal` clause. Only a function inside a function may have `nonlocal` variables.
 
   In order to assert if function "`IsPropertyReference` ( `V` )" is true, use `assert IsPropertyReference(V)`.
+
+  Whenever the specification says to throw an exception SOME_ERROR, return `ThrowCompletion(Error["SOME_ERROR"]("MESSAGE"))`.
+  Convert SOME_ERROR to camel case, i.e. when SOME_ERROR is `"Typeerror"` convert it to `"TypeError"`. SOME_ERROR is a string, so put it in quotes.
+  The MESSAGE should be a string referencing the name of the function the error happens in, and the condition that caused it.
+   I.e. the following spec line "If ERROR_CONDIDION, throw SOME_ERROR" happening inside function FUNC_NAME should result in `return ThrowCompletion(Error["SOME_ERROR"]("Error in FUNC_NAME: ERROR_CONDITION"))`.
+  Whenever the specification says to create an Error object instance, add message to the constructor referencing the function name. Convert the error type name to camel case.
+   I.e. "a newly created `Typeerror` object" inside a function FUNC_NAME should result in `Error["TypeError"]("Error inside FUNC_NAME")`.
  </prompt>
 
 </codegen>
