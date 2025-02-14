@@ -34,6 +34,7 @@ def function():
    Rename variable or attribute `max` to `max_`.
    Rename variable or attribute `str` to `str_`.
    Rename variable or attribute `type` to `type_`.
+   Rename variable or attribute `async` to `async_`.
   However function `min` should stay as `min`.
 
   Do not consult any external resources for code generation. Make code based on the provided specification only.
@@ -46,14 +47,23 @@ def function():
   A prototype is a dict where keys are strings.
    The first element is the function kind (a string) `"__kind":FUNCTION_KIND`, one of: `"abstract operation"`, `"syntax-directed operation"`, `"concrete method"`, `"internal method"`.
    If the function is of kind "concrete method" or "internal method", there is an additional element `"__class":CLASS_NAME` where the CLASS_NAME is the name of the class this method is from, as specified.
-   The next element is the function name (a string) `"__name":FUNCTION_NAME, as provided in the spec. If the provided name contains a slash, like "AAAA / BBBB", connect it with underscore: `AAAA_BBBB`.
+
+   The next element is the function name (a string) `"__name":FUNCTION_NAME`, as provided in the spec.
+    If the provided name contains a slash, like "AAAA / BBBB", connect it with underscore: `AAAA_BBBB`.
+
    If the function is of kind "syntax-directed operation", there is special first argument `"self":Self`.
    If the function is of kind "concrete method", there is special first argument `"VARIABLE":Self` where the argument name VARIABLE is provided in the spec.
    Next elements are arguments with types, in the format `ARGUMENT: TYPE`. ARGUMENT is a string and TYPE is a valid Python type identifier. Note that TYPE is not a string and shouldn't be in quotes.
     If ARGUMENT is a Python reserved word, a Python built-in function name or one of standard Python type names, append underscore.
-    I.e. convert `"len":TYPE` to `"len_":TYPE`, `"str":TYPE` to `"str_":TYPE`, `"min":TYPE` to `"min_":TYPE`, `"type":TYPE` to `"type_":TYPE`, `"set":TYPE` to `"set_":TYPE`, `"match":TYPE` to `"match_":TYPE`, etc.
+    Convert argument name `"len":TYPE` to `"len_":TYPE`.
+    Convert argument name `"str":TYPE` to `"str_":TYPE`.
+    Convert argument name `"min":TYPE` to `"min_":TYPE`.
+    Convert argument name `"type":TYPE` to `"type_":TYPE`.
+    Convert argument name `"set":TYPE` to `"set_":TYPE`.
+    Convert argument name `"match":TYPE` to `"match_":TYPE`.
    The return type, if present, is provided in the last element as: `"return": RETURN_TYPE`.
   I.e.: `{"__kind":"FUNCTION_KIND", "__name":"FUNCTION_NAME", "ARG1":TYPE1, "ARG2":TYPE2, ..., "return":RETURN_TYPE}`.
+  Make sure TYPE1, TYPE2, ... and RETURN_TYPE are not strings but identifiers.
 
   An "abstract operation" is just a regular function. Use FUNCTION_KIND = "abstract operation".
    If the function name of the abstract operation contains double colon ("::") replace it with a dot ("."), so "NAME1 : : NAME2" becomes `NAME1.NAME2`.
@@ -68,49 +78,84 @@ def function():
   If some type can not be determined, omit it, providing just the argument name.
   If the spec explicitly says the argument is optional (like "optional argument"), make the whole type an union with `None`. So if the spes says the optional argument has some type, like `"ARG":TYPE`, make it `"ARG":(TYPE) | None`.
   When one argument is optional, all subsequent arguments are optional too, so add the `None` alternative to all arguments following the one marked as optional, except "return" type. (Preceding arguments are unaffected.)
-  Example: "optional argument `env` ( an Environment Record or `Undefined` )" becomes `"env":(EnvironmentRecord | UndefinedType) | None`.
+  Example: "optional argument `env` ( an Environment Record or `Undefined` )" becomes `"env":(EnvironmentRecord | type(Undefined)) | None`.
   Note: `Null` or `Undefined` argument types are not enough to consider the argument optional. The spec must explicitly say "optional argument", otherwise the argument is mandatory.
 
   If the spec says about many possible types (like "TYPE1 or TYPE2"), connect them into union using the `|` operator, like: `TYPE1 | TYPE2`.
   If the spec says "List of TYPEs" where the second type is plural, it means `List[TYPE]`.
+  If the spec says "a set of TYPEs" where the second type is plural, it means `Set[TYPE]`.
 
-  When the spec says "Nonterminal(XXX)" convert it to `Nonterminal[XXX]`.
-  When the spec mentions alternative of nonterminals, like "Nonterminal(AAA) or Nonterminal(BBB)" convert it to `Nonterminal[AAA, BBB]`. This rule does not affect `Enum_` which should be rendered as union using "|" operator.
-  A type of form "Nonterminal(XXX) Parse Node" should be converted to a type `ParseNode[Nonterminal[XXX]]`.
+  When the spec says "Nonterminal('XXX') Parse Node" convert it to `ParseNode[Nonterminal[{'XXX'}]]`.
+  When the spec simply says "Nonterminal('XXX')" convert it to `Nonterminal[{'XXX'}]`.
+  When the spec mentions alternative of nonterminals, like "Nonterminal('AAA') or Nonterminal('BBB')" convert it to `Nonterminal[{'AAA', 'BBB'}]`.
+
+  When the spec says "Terminal('XXX')" convert it to `Terminal[{'XXX'}]`.
+  When the spec mentions alternative of terminals, like "Terminal('AAA') or Terminal('BBB')" convert it to `Terminal[{'AAA', 'BBB'}]`.
+
+  When the spec says "&lt;constant&gt; 'XXX'" convert it to `Constant[{Constant.XXX}]`.
+   Replace hyphen "-" with underscore "_" in XXX.
+   If XXX is "async", use `Constant.async_`.
+   If XXX is "all", use `Constant.all_`.
+   If XXX is "global", use `Constant.global_`.
+  When the spec mentions alternative of constants, like "&lt;constant&gt; 'AAA' or &lt;constant&gt; 'BBB'" convert it to `Constant[{Constant.AAA, Constant.BBB}]`.
+   Replace hyphen "-" with underscore "_" in AAA and BBB.
+   If AAA or BBB is "async", use `Constant.async_`.
+   If AAA or BBB is "all", use `Constant.all_`.
+   If AAA or BBB is "global", use `Constant.global_`.
+   Example: "&lt;constant&gt; 'sync' or &lt;constant&gt; 'async'" should yield `Constant[{Constant.sync, Constant.async_}]`.
+
+  When the spec mentions an error type, like SyntaxError, TypeError or WHATEVERerror, use the type `Error['WHATEVERError']`. Here 'WHATEVERError' is a string, so put it in quotes.
+  Convert the error name to camel case, i.e. "Typeerror" becomes "TypeError".
+  If the spec simply says "error" without a specific subtype, use `Error`.
 
   A "completion" is a type `CompletionRecord`. Additional qualifiers possible on a completion are:
-   "normal completion" is `CompletionRecord['normal']`
-   "abrupt completion" is `CompletionRecord['abrupt']`
-   "XXX completion" is `CompletionRecord['XXX']`
-   "normal completion containing YYY" is CompletionRecord['normal', YYY]`
+   "normal completion" is `CompletionRecord[Constant[{Constant.normal}]]`
+   "abrupt completion" is `CompletionRecord[Constant[AbruptCompletions]]]`
+   "XXX completion" (except when XXX is "abrupt") is `CompletionRecord[Constant[{Constant.XXX}]]` (Replace hyphen "-" with "_" in XXX. If XXX is "return", use `Constant.return_`. If XXX is "break", use `Constant.break_`. If XXX is "continue", use `Constant.continue_`.)
+   "normal completion containing YYY" is CompletionRecord[Constant[{Constant.normal}], YYY]`
+  An alternative of `CompletionRecord` types should not be merged and should stay as a union.
+   I.e. "return either a normal completion containing &lt;constant&gt; 'unused' or a throw completion" should give: `CompletionRecord[Constant[{Constant.normal}], Constant[{Constant.unused}]] | CompletionRecord[Constant[{Constant.throw}]]`.
 
   A "record" type is a class `Record` with additional field specification. Add those fields as a dict in square braces. I.e. when the spec says "Record with fields `AAA` (a TYPE1) and `BBB` (a TYPE2)", use: `Record[{'AAA':TYPE1, 'BBB':Type2}]`
 
   When the spec says about subclass of a type, just use the base type.
 
-  When the spec says "ECMAScript language value", use `ECMAScriptLanguageValue`.
-  When the spec says "function object" or "ECMAScript function object", use `ECMAScriptFunctionObject`
+  When the spec uses the phrase "a set of algorithm steps , or some other definition of a function's behaviour provided in this specification" just use the type `FunctionSpec`.
+
+  When the spec says "mathematical value", use `MathematicalValue`.
+  When the spec says "ECMAScript language value", use `LanguageValue`.
+  When the spec says "function object" or "built - in function object" or "ECMAScript function object", use `Function`.
+  When the spec says "ECMAScript code execution context" or "execution context", use `ExecutionContext`.
   When the spec uses type name "boolean" or "bool", use `Boolean`.
-  When the spec uses type name "integer" or "int", use `BigInt`.
+  When the spec uses type name "integer" or "int" or "integral number", use `Number['int']`.
+  When the spec uses type name "non - negative integer", use `Number['uint']`.
+  When the spec uses type name "Number", use `Number`.
   When the spec uses type name "string" or "str", use `String`.
   When the spec uses type name "list" or "sequence", use `List`.
   When the spec uses type name "object", use `Object`.
+  When the spec uses type name "ordinary object", use `OrdinaryObject`.
   When the spec uses type name "set", use `Set`.
   When the spec uses type name "array", use `Array`.
-  When the spec uses type name "ordinary object", use `OrdinaryObject`.
-  When the spec says the function returns "null", use type `NullType`.
-  When the spec says the function returns "undefined", use type `UndefinedType`.
-  When the spec says the function returns "∞", use type `InfinityType`.
+  When the spec uses type name "TypedArray", use `TypedArray`.
+  When the spec uses type name "BigInt", use `BigInt`.
+  When the spec says the function returns "null", use type `type(Null)`.
+  When the spec says the function returns "undefined", use type `type(Undefined)`.
+  When the spec says the function returns "∞", use type `Number['inf']`.
+  When the spec says the function returns "NaN", use type `Number['nan']`.
   When the spec says "code point", use type `CodePoint`.
   When the spec says "time value", use type `TimeValue`.
   When the spec says "RegExp Record", use type `RegExp`.
   When the spec says "any value", use type `AnyValue`.
-  When the spec says "SOME_TYPE except OTHER_TYPE", use a special "Except" type function like that: `SOME_TYPE - OTHER_TYPE`.
+  When the spec says "SOME_TYPE except OTHER_TYPE", use `SOME_TYPE - OTHER_TYPE`.
   When the spec says "property key" or "property keys" it means the type `PropertyKey`.
   When the spec says "0 or 1" use `Bit`.
+  When the spec says "byte" use `Byte`.
 
   If none of the rules above apply and a type spec ends with "Record", include that "Record" as part of the type name. I.e. "Some Thing Record" should be `SomeThingRecord`.
   If none of the rules above apply and a multi-word type description ends with "Object", remove the final word "Object" from the type name. I.e. "Some Thing Object" should be just `SomeThing` (skipping "Object").
+
+  As a special case, if the spec says "The abstract operation Set ...", replace the function name with "Set_", so use: `{"__kind":"abstract operation", "__name":"Set_", ...}`.
+   This is to distinguish the function from type name. Function name should be "Set_" and type name should be "Set".
 
   Example:
    If you receive the input: "The syntax - directed operation Evaluation takes no arguments and returns a Completion Record ."
@@ -127,6 +172,15 @@ def function():
   Keep the name of the method `Contains` as it is; do not convert to lowercase.
   But when the spec says "EXPR1 contains EXPR2" where the word "contains" is lowercase and not in apostrophes and not preceded by "&lt;method&gt;" qualifier, then render it as `EXPR1 in EXPR1`.
 
+  When the spec uses "&lt;constant&gt; 'SOMETHING'" convert it to `Constant.SOMETHING` (but consider the special cases below). Replace hyphen "-" with underscore "_" in SOMETHING. Also append underscore if SOMETHING is a reserved word.
+   When you see "&lt;constant&gt; 'async'", use `Constant.async_`.
+   When you see "&lt;constant&gt; 'global'", use `Constant.global_`.
+   When you see "&lt;constant&gt; 'all'", use `Constant.all_`.
+   When you see "&lt;constant&gt; 'return'", use `Constant.return_`.
+   When you see "&lt;constant&gt; 'break'", use `Constant.break_`.
+   When you see "&lt;constant&gt; 'continue'", use `Constant.continue_`.
+   But dont append underscore when you see "&lt;constant&gt; 'empty'", use `Constant.empty`.
+
   Use the following constant mapping:
    "undefined" to `Undefined`;
    "null" to `Null`;
@@ -138,27 +192,34 @@ def function():
   The special expression "+ 0 ( 𝔽 )" means `+Zero` and the special expression "- 0 ( 𝔽 )" and "_ 0" means `-Zero`, but if "0" appears in other context just use literal `0`.
   The constant "NaN" is just `NaN`.
 
+  When the spec says "&lt;function&gt; `FUNCNAME`" without braces it means to call FUNCNAME with empty argument list: `FUNCNAME()`.
+  I.e. "&lt;function&gt; `msPerDay`" means `msPerDay()`.
+
   When testing if "`VARIABLE` is undefined", use equality operator: `VARIABLE == Undefined`.
   When testing if "`VARIABLE` is null", use equality operator: `VARIABLE == Null`.
+  When testing if "`VARIABLE` is + 0 ( 𝔽 )", use equality operator: `VARIABLE == +Zero`.
+  When testing if "`VARIABLE` is - 0 ( 𝔽 )", use equality operator: `VARIABLE == -Zero`.
+  When testing if "`VARIABLE` is + ∞", use equality operator: `VARIABLE == +Infinity`.
+  When testing if "`VARIABLE` is - ∞", use equality operator: `VARIABLE == -Infinity`.
   When using a value in a test "if VALUE is true ...", test for boolean value: `if VALUE: ...`.
   When using a value in a test "if VALUE is false ...", negate the value: `if not VALUE: ...`.
 
   Whenever the specification says "VALUE is a TYPE" or "VALUE is an TYPE" it is a type check, so use `isinstance(VALUE, TYPE)`, except when TYPE is a Nonterminal.
-  When testing for types, like `Bool`, `String`, `Number`, `BigInt`, `List`, `Set`, `Array`, `Object`, 'ECMAScriptFunctionObject`  etc. using the construction "VALUE is a TYPE", keep the original type name and do not change it to Python equivalent, i.e. `isinstance(VALUE, TYPE)`.
+  When testing for types, like `Bool`, `String`, `Number`, `BigInt`, `List`, `Set`, `Array`, `Object`, 'Function`  etc. using the construction "VALUE is a TYPE", keep the original type name and do not change it to Python equivalent, i.e. `isinstance(VALUE, TYPE)`.
   When the spec says "list of TYPE", use `List[TYPE]`.
   Whenever the specification line starts with "Assert :" insert `assert CONDITION` where CONDITION is Python code. Interpret the rest of the line after "Assert :" as the condition to check.
-  To check if a VALUE is a "TYPE completion", test if its `Type` attribute is equal to `Enum_['TYPE']`.
-  To check if a VALUE is an "abrupt completion", test if its `Type` attribute is not equal to `Enum_['normal']`.
+  To check if a VALUE is a "TYPE completion", test if its `Type` attribute is equal to `Constant.TYPE'`.
+  To check if a VALUE is an "abrupt completion", test if its `Type` attribute is not equal to `Constant.normal`.
   Whenever the specification line starts with "Note : TEXT" insert a comment into generated code (like `# TEXT`) containing the rest of the spec line.
 
   Whenever some "let" or "set" statement contains the token "&lt;return_if_abrupt&gt;", check if the result VARIABLE (keep the original variable name) is an abrupt completion.
    If yes, return the value from the function.
    If no, substitute the value with the attribute `Value` of the value.
-  Example: "let `VARIABLE` be &lt;return_if_abrupt&gt; &lt;function&gt; ..." or "let `VARIABLE` be ? &lt;method&gt; ..."  ->  `VARIABLE = ...\nif VARIABLE.Type != Enum_['normal']:\n\treturn VARIABLE\nelse:\n\tVARIABLE = VARIABLE.Value`.
+  Example: "let `VARIABLE` be &lt;return_if_abrupt&gt; &lt;function&gt; ..." or "let `VARIABLE` be ? &lt;method&gt; ..."  ->  `VARIABLE = ...\nif VARIABLE.Type != Constant.normal:\n\treturn VARIABLE\nelse:\n\tVARIABLE = VARIABLE.Value`.
 
   Whenever a "perform" statement contains the token "&lt;return_if_abrupt&gt;", save the result to some VARIABLE with unique temporary name (prepend `result_NUM = `) and check if it is an abrupt completion.
    If yes, return the value from the function.
-  Example: "perform &lt;return_if_abrupt&gt; &lt;function&gt; ..." or "perform &lt;return_if_abrupt&gt; &lt;method&gt; ..."  ->  `VARIABLE = ...\nif VARIABLE.Type != Enum_['normal']:\n\treturn VARIABLE`.
+  Example: "perform &lt;return_if_abrupt&gt; &lt;function&gt; ..." or "perform &lt;return_if_abrupt&gt; &lt;method&gt; ..."  ->  `VARIABLE = ...\nif VARIABLE.Type != Constant.normal:\n\treturn VARIABLE`.
 
   Whenever a "return" statement contains the token "&lt;return_if_abrupt&gt;" no special action is needed; just return the result unmodified. Do not extract fields nor create `CompletionRecord`; it will be done automatically.
   Do not create `CompletionRecord` unless explicitly told so.
@@ -166,25 +227,43 @@ def function():
   Whenever some "let" or "set" statement contains the token "&lt;raise_if_abrupt&gt;", check if the result VARIABLE (keep the original variable name) is an abrupt completion.
    If yes, raise RuntimeError.
    If no, substitute the value with the attribute `Value` of the value.
-  Example: "let `VARIABLE` be &lt;raise_if_abrupt&gt; &lt;function&gt; `ArrayCreate` ( ... )"  ->  `VARIABLE = ArrayCreate (...)\nif VARIABLE.Type != Enum_['normal']:\n\traise RuntimeError("As per spec this function must return normal completion.")\nelse:\n\tVARIABLE = VARIABLE.Value`.
+  Example: "let `VARIABLE` be &lt;raise_if_abrupt&gt; &lt;function&gt; `ArrayCreate` ( ... )"  ->  `VARIABLE = ArrayCreate (...)\nif VARIABLE.Type != Constant.normal:\n\traise RuntimeError("As per spec this function must return normal completion.")\nelse:\n\tVARIABLE = VARIABLE.Value`.
 
   Whenever a "perform" statement contains the token "&lt;raise_if_abrupt&gt;", save the result to some VARIABLE with unique temporary name (prepend `result_NUM = `) and check if it is an abrupt completion.
    If yes, raise RuntimeError.
-  Example: "perform &lt;raise_if_abrupt&gt; &lt;function&gt; `InitializeReferencedBinding` ( ... )"  ->  `VARIABLE = ... InitializeReferencedBinding(...)\nif VARIABLE.Type != Enum_['normal']:\n raise\tRuntimeError("As per spec this function must return normal completion.")`.
+  Example: "perform &lt;raise_if_abrupt&gt; &lt;function&gt; `InitializeReferencedBinding` ( ... )"  ->  `VARIABLE = ... InitializeReferencedBinding(...)\nif VARIABLE.Type != Constant.normal:\n raise\tRuntimeError("As per spec this function must return normal completion.")`.
 
-  Whenever the specification says "`𝔽` ( VALUE )" or "VALUE (𝔽)" or "Number value for VALUE" it means `Number(VALUE)`.
-  Whenever the specification says "`ℤ` ( VALUE )" or "VALUE (ℤ)" or "BigInt value for VALUE" it means `BigInt(VALUE)`.
-  Whenever the specification says "`ℝ` ( VALUE )" or "&lt;method&gt; `ℝ` ( VALUE )" or "mathematical value of VALUE" it means `VALUE.MV()`.
+  Whenever the specification says "&lt;function&gt; `𝔽` ( VALUE )" it means `Number(VALUE)`.
+  Whenever the specification says "`VALUE` (𝔽)" it means `Number(VALUE)`.
+  Whenever the specification says "Number value for VALUE" it means `Number(VALUE)`.
+
+  Whenever the specification says "&lt;function&gt; `ℤ` ( VALUE )" it means `BigInt(VALUE)`.
+  Whenever the specification says "`VALUE` (ℤ)" it means `BigInt(VALUE)`.
+  Whenever the specification says "BigInt value for VALUE" it means `BigInt(VALUE)`.
+
+  Whenever the specification says "&lt;method&gt; `ℝ` ( VALUE )" it means `VALUE.MV()`.
+  Whenever the specification says "mathematical value of VALUE" it means `VALUE.MV()`.
+  Do not use the expression `ℝ(XXX)`. Convert it to `XXX.MV()` instead.
+
   Expressions of the form "U + XXXX ( DESCR )" are Unicode codepoints. Convert them to `chr(0xXXXX)` and put DESCR in the comment in the same line. To obtain numeric value of such Unicode codepoint use function `ord`.
 
+  To create a new "ECMAScript code execution context" or simply "execution context", call the constructor `ExecutionContext`.
   To obtain the running execution context, call `execution_context_stack[-1]`.
+  Before a new execution context is pushed onto context stack, the old context must be stopped, unless the spec explicitly says to stop it at some different point.
+  After a new execution context is pushed onto context stack, it must be started by calling its `start` method.
+  Before an execution context is removed (popped) from the stack, it must be stopped by calling its `stop` method.
+  After an execution context has been popped from the stack, the context that is now on the top must be started. Do not perform this step if the stack is empty, the spec says not to start the old context or if the spec says to start it at some different point.
+  This implementation does not need any implementation - defined initialization of execution context, so no special action is needed.
+  To discard all resources associated with the current execution context first stop it by calling `execution_context_stack[-1].stop()`, then pop it from the context stack.
+  To suspend an execution context (when it is on the stack), call its `stop` method. Do not pop it from the stack.
+  To resume an execution context (when it is on the stack), call its `start` method. It must be at the top of the stack, so use `execution_context_stack[-1].start()`.
   
   To check for duplicates, use `len(COLLECTION) == len(set(COLLECTION))`.
 
   If other rules don't apply, when the specification says "A is B", use `A == B`; when the specification says "A is not B", use `A != B`.
 
   Never return CompletionRecord unless the spec explicitly says "Return Completion Record". ReferenceRecord is not CompletionRecord.
-  Do not return `CompletionRecord(Type=Enum_['normal'], Value=XXX)`, just return `XXX` instead.
+  Do not return `CompletionRecord(Type=Constant.normal, Value=XXX)`, just return `XXX` instead.
 
   Remove double square braces, i.e. "[ [ SOMETHING ] ]" becomes `SOMETHING`.
   Replace dot - double square brace expression with attribute lookup, i.e. convert "OBJ . [ [ SOMETHING ] ]" to `OBJ.SOMETHING`.
@@ -200,6 +279,8 @@ def function():
   When comparing two `Terminal`s, use comparison operator: `TERMINAL1 == TERMINAL2`.
 
   Whenever the specification says "`VARIABLE` is not present", test it as `VARIABLE is None`. Similarly "`VARIABLE` is present" means `VARIABLE is not None`.
+
+  To create a new ECMAScript function object call the constructor `Function`.
  </prompt>
 
  <prompt context="Syntax Directed Operation">
@@ -283,7 +364,7 @@ def METHOD_NAME(self:Self, ARGS):
   To check if debugging is enabled, call `is_debug_enabled()`.
   To perform an implementation-defined debugging action, call the function `debug` (like: `result = debug()`) and then return the completion record `Completion(result)`.
 
-  Never return `CompletionRecord(Type=Enum_['normal'], Value=NotImplemented)`, just return `NotImplemented`.
+  Never return `CompletionRecord(Type=Constant.normal, Value=NotImplemented)`, just return `NotImplemented`.
  </prompt>
 
  <prompt context="Abstract Operation">
@@ -296,11 +377,10 @@ def METHOD_NAME(self:Self, ARGS):
   The list of all internal method names is in global variable `all_internal_methods`. The list of essential internal methods is in global variable `essential_internal_methods`.
   To check if an object OBJ has a ATTR field, use `hasattr(OBJ, 'ATTR')`.
   To check if an object OBJ has a property PROP, use `PROP in OBJ`.
-  Whenever the specification says "`number` is finite", use `number not in [+Infinity, -Infinity]`. Notice that if number IS finite, it does NOT belong to infinity list.
-  Whenever the specification says "`number` is not finite", use `number in [+Infinity, -Infinity]`. Notice that if number is NOT finite, it DOES belong to infinity list.
-  Whenever the specification says "`number` is infinite", use `number in [+Infinity, -Infinity]`. Notice that if number IS infinite, it DOES belong to infinity list.
   To check in a value is Null, use `value == Null`. To check if value is not Null, use `value != Null`.
-
+  
+  To test if a value is integer, use `isinstance(value, Number['int'])`.
+  To test if a value is finite, use `not isinstance(value, Number['inf'])`.
   To test if a VALUE is a Private Name, use `isinstance(VALUE, PrivateName)`.
   `GlobalSymbolRegistry` is a global variable.
 
@@ -329,21 +409,35 @@ def METHOD_NAME(self:Self, ARGS):
   When returning an inner function without a specified name i.e. "Return a new Matcher", give it a name by prepending underscore to the type name and apply a decorator as above (i.e. `@Matcher\ndef _Matcher`). Then return the created closure (`return _Matcher`).
   But if the spec provides a name, like "Let `closure` be an Abstract Closure ..." then use that name.
   When the spec says that an inner function "captures" some variables of the host function, add them as `nonlocal` to the inner function. Make sure that those identifiers appear as variables in the host function.
-   I.e. "Let `setterClosure` be a new Abstract Closure with parameters ( `value` ) that captures `name` and `env` ...", translates to:
+   Example:
+    When a spec line says: "Let `setterClosure` be a new Abstract Closure with parameters ( `value` ) that captures `name` and `env` ..."
+    1. Make sure `name` and `env` are variables of the outer function, not arguments of the current function. If they are arguments of the toplevel function, do not put them in `nonlocal` clause. Nonlocals must be inside closure.
+    2. Yield the code:
 ```
-	name = ?
-	env = ?
+	## THERE IS NO `nonlocal` HERE, ONLY INSIDE THE CLOSURE
 	
 	# Closure definition
 	@AbstractClosure
 	def setterClosure(value):
 		nonlocal name, env
 		...
-	# Use the defined closure under name `setterClosure`
 	
-	setterClosure
 ```
+    3. Use the defined closure under name `setterClosure`.
+
+  A function that is defined at top level (not inside other function) must not have `nonlocal` identifiers.
   Normal (non-inner) functions never have a `nonlocal` clause. Only a function inside a function may have `nonlocal` variables.
+  
+  When making the function `CreateArrayIterator` start it like that:
+```
+def CreateArrayIterator(array: Object, kind: Constant[{Constant.key_value, Constant.key, Constant.value}]) -> Generator:
+	# No `nonlocal` here.
+	
+	@AbstractClosure
+	def closure():
+		nonlocal kind, array
+		...
+```
 
   In order to assert if function "`IsPropertyReference` ( `V` )" is true, use `assert IsPropertyReference(V)`.
 
@@ -353,6 +447,13 @@ def METHOD_NAME(self:Self, ARGS):
    I.e. the following spec line "If ERROR_CONDIDION, throw SOME_ERROR" happening inside function FUNC_NAME should result in `return ThrowCompletion(Error["SOME_ERROR"]("Error in FUNC_NAME: ERROR_CONDITION"))`.
   Whenever the specification says to create an Error object instance, add message to the constructor referencing the function name. Convert the error type name to camel case.
    I.e. "a newly created `Typeerror` object" inside a function FUNC_NAME should result in `Error["TypeError"]("Error inside FUNC_NAME")`.
+
+  As a special case, convert the name of function "Set" to `Set_`. But when the spec says to "create a new set" then use constructor `Set` without underscore. `Set_` is a function and `Set` is a type name.
+  I.e. use `Set_(globalObj, V.ReferencedName, W, False)`.
+
+  Never use `mode == Constant.async`. Use `mode == Constant.async_` instead.
+
+  The subexpression "&lt;method&gt; `ℝ` ( `t` / &lt;function&gt; `msPerDay` )" means `(t / msPerDay()).MV()`.
  </prompt>
 
 </codegen>

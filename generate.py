@@ -74,7 +74,7 @@ def render_node(node, path, index, **kwargs):
 		else:
 			yield path[-1] + "(" + repr(node.value) + ")"
 	elif path[-1] == 'Enum_':
-		yield path[-1] + "[" + repr(node.value) + "]"
+		yield "<constant> " + repr(node.value)
 	elif path[-1] in ['Variable', 'ObjectField']:
 		yield "`" + node.value + "`"
 	elif path[-1] == 'Constant':
@@ -237,8 +237,10 @@ def specification_abstract_operations(specification):
 	"Prepare the spec of abstract operations. Yields all operations from the spec one by one."
 	
 	for clause in specification.find_clauses_with_title_ending_with(")"):
-		if ("::" in clause.title) or ("." in clause.title) or ("EnumerateObjectProperties " in clause.title) or ("CreateIntrinsics " in clause.title):
+		if ("::" in clause.title) or ("." in clause.title):
 			continue
+		#if all(not clause.title.startswith(_name + " ") for _name in problematic_functions):
+		#	continue
 		if not clause.paragraphs:
 			continue
 		
@@ -329,6 +331,11 @@ def generate_header(codegen, prompt, spec):
 			spec += " \nDon't make syntax errors! Place quotes around strings correctly! (\"STRING\")"
 			continue
 		else:
+			keys = frozenset(types.keys())
+			forbidden_keys = frozenset({'list', 'object', 'input', 'global', 'match', 'len', 'exec', 'set', 'map', 'next', 'min', 'max', 'str', 'type', 'async'})
+			if keys & forbidden_keys:
+				spec += " \nAppend underscore to the following argument names: " + ", ".join(keys & forbidden_keys) + "."
+				continue
 			break
 	else:
 		raise RuntimeError("Model makes too many syntax errors!")
@@ -624,6 +631,8 @@ if __name__ == '__main__':
 	
 	dest_dir = Path('gencode')
 	dest_dir.mkdir(exist_ok=True)
+
+	problematic_functions = ["Set", "PutValue", "CreateArrayIterator", "DoWait", "NewPromiseReactionJob", "MinFromTime", "TimeWithinDay", "Day", "GetValueFromBuffer", "SetValueInBuffer", "GetRawBytesFromSharedBlock"]
 	
 	verbose = True
 	tee_files(dest_dir / 'ao_library.py', print_=verbose)(compile_abstract_operations)(specification, codegen, prompt)

@@ -35,6 +35,13 @@
 #export LLM_CONFIG_EXTRA='{}'
 
 
+## OpenRouter. No free tier
+
+#export LLM_API_URL=https://openrouter.ai/api/v1
+#export LLM_API_KEY=
+#export LLM_MODEL=mistralai/codestral-2501
+#export LLM_CONFIG_EXTRA='{}'
+
 
 # Providers that don't support Codestral
 
