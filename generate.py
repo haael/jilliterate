@@ -21,6 +21,33 @@ def roman(n:int)->str:
 	return roman_numeral
 
 
+def render_references(node, path, index, **kwargs):
+	if path[-1] == 'Reference':
+		if node.content[0] == "Table" or all(isinstance(_el, Digits) or _el == "." for _el in node.content):
+			yield node.href
+	else:
+		for key, value in kwargs.items():
+			if value is None:
+				continue
+			for r in value:
+				if isinstance(r, str):
+					if r.startswith('#'):
+						yield r
+				else:
+					#print("key", key)
+					try:
+						try:
+							for q in r:
+								if isinstance(q, str):
+									yield q
+								else:
+									yield from q
+						except TypeError:
+							yield from r
+					except TypeError:
+						pass
+
+
 def render_cmd(index, content):
 	"Make a string representing a single 'command' (i.e. sentence) from ECMA spec. Render all markup as ASCII."
 	
@@ -90,13 +117,22 @@ def render_node(node, path, index, **kwargs):
 		yield "<function>"
 		yield "`" + node.aoid + "`"
 	elif path[-1] == 'Reference':
+		if all(_el == "." or isinstance(_el, (HexDigits, Digits)) for _el in node.content):
+			yield "Section ["
+			section = True
+		else:
+			section = False
+
 		if kwargs['content'] is not None:
 			for token in kwargs['content']:
 				if isinstance(token, str):
 					yield token
 				else:
 					yield from token
-		#yield "/" + node.href + "/"
+		
+		if section:
+			yield "]"
+	
 	elif path[-1] == 'Production':
 		head = next(kwargs['head'])
 		symbols = "[" + ", ".join(chain.from_iterable(kwargs['symbols'])) + "]"
@@ -241,6 +277,8 @@ def specification_abstract_operations(specification):
 			continue
 		#if all(not clause.title.startswith(_name + " ") for _name in problematic_functions):
 		#	continue
+		#if all(not clause.title.startswith(_name + " ") for _name in ["BoundFunctionCreate"]):
+		#	continue
 		if not clause.paragraphs:
 			continue
 		
@@ -262,14 +300,31 @@ def specification_abstract_operations(specification):
 		for line in clause.render(render_scattered_sdo):
 			if line is None:
 				if result:
-					yield "\n".join(result)
+					#for ref in frozenset(clause.render(render_references)):
+					#	try:
+					#		section = specification.find_definition(ref[1:])
+					#	except KeyError:
+					#		print("Href not found:", ref)
+					#		continue
+					#	else:
+					#		result.append("")
+					#		if isinstance(section, Table):
+					#			result.append("# Table ")
+					#		else:
+					#			result.append("# Section [" + " . ".join(str(_x) for _x in section.chapter) + "]")
+					#		for lv, ln in section._print():
+					#			result.append(" " * lv + ln)
+					#		result.append("")
+						
+					yield 'body', "\n".join(result)
+				
 				result.clear()
 			elif line.startswith("The abstract operation "):
 				assert not result
-				yield line
+				yield 'head', line
 			else:
 				result.append(line)
-
+		
 
 def specification_syntax_directed_operations(specification):
 	"Prepare the spec of syntax-directed operations. Yields all operations from the spec. First yields the operation header, then all its subsections one by one, then the header of the next operation and so on."
@@ -473,12 +528,12 @@ def compile_abstract_operations(specification, codegen, prompt):
 	yield "from definitions import *"
 	yield ""
 	yield ""
-	for spec in specification_abstract_operations(specification):
-		if spec.startswith("The abstract operation "):
+	for stype, spec in specification_abstract_operations(specification):
+		if stype == 'head':
 			this_spec = '\t"""' + spec.replace("\\", "\\\\").replace("\n", " ").strip() + '"""'
 			func_kind, func_name, func_args, func_arg_types,  func_arg_optional, func_return_type = generate_header(codegen, prompt, spec)
 			#assert func_kind == "abstract operation", func_kind
-		else:
+		elif stype == 'body':
 			yield '"""'
 			yield spec.replace("\\", "\\\\")
 			yield '"""'
@@ -490,6 +545,8 @@ def compile_abstract_operations(specification, codegen, prompt):
 				yield line
 			yield ""
 			yield ""
+		else:
+			raise ValueError
 	yield ""
 	yield ""
 
@@ -601,6 +658,22 @@ def compile_syntax_directed_operations(specification, codegen, prompt):
 	yield ""
 
 
+
+#if __debug__ and __name__ == '__main__':
+#	from pickle import load
+#	
+#	with Path('specification.pickle').open('rb') as fd:
+#		specification = load(fd)
+#	
+#	for stype, spec in specification_abstract_operations(specification):
+#		if stype == 'head':
+#			print("----")
+#		print(spec)
+#		print()
+#
+#	quit()
+
+
 if __name__ == '__main__':
 	from pickle import load
 	from codegen import Codegen
@@ -635,8 +708,8 @@ if __name__ == '__main__':
 	problematic_functions = ["Set", "PutValue", "CreateArrayIterator", "DoWait", "NewPromiseReactionJob", "MinFromTime", "TimeWithinDay", "Day", "GetValueFromBuffer", "SetValueInBuffer", "GetRawBytesFromSharedBlock"]
 	
 	verbose = True
-	tee_files(dest_dir / 'ao_library.py', print_=verbose)(compile_abstract_operations)(specification, codegen, prompt)
-	tee_files(dest_dir / 'early_errors.py', print_=verbose)(compile_early_errors)(specification, codegen, prompt)
-	tee_files(dest_dir / 'evaluation.py', print_=verbose)(compile_evaluation)(specification, codegen, prompt)
+	#tee_files(dest_dir / 'ao_library.py', print_=verbose)(compile_abstract_operations)(specification, codegen, prompt)
+	#tee_files(dest_dir / 'early_errors.py', print_=verbose)(compile_early_errors)(specification, codegen, prompt)
+	#tee_files(dest_dir / 'evaluation.py', print_=verbose)(compile_evaluation)(specification, codegen, prompt)
 	tee_files(dest_dir / 'sdo_library.py', print_=verbose)(compile_syntax_directed_operations)(specification, codegen, prompt)
 

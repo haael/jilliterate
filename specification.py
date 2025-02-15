@@ -169,10 +169,12 @@ class Algorithm(TypedRecord):
 
 
 class Table(TypedRecord):
+	id_: str
 	head: list_of(list_of(Paragraph|Algorithm))
 	body: list_of(list_of(Paragraph|Algorithm))
 	
-	def __init__(self):
+	def __init__(self, id_):
+		self.id_ = id_
 		self.head = []
 		self.body = []
 		if __debug__:
@@ -198,7 +200,10 @@ class Table(TypedRecord):
 	grammars = GatheringProperty('grammars', ['head', 'body'])
 	
 	def find_definition(self, id_):
-		for row in self.rows:
+		if self.id_ == id_:
+			return self
+		
+		for row in self.body:
 			for cmd in row:
 				try:
 					return cmd.find_definition(id_)
@@ -206,6 +211,23 @@ class Table(TypedRecord):
 					pass
 		else:
 			raise KeyError(f"Definition with id `{id_}` not found.")
+	
+	def _print(self, level=0):
+		yield level, "======"
+		
+		for n, row in enumerate(self.head):
+			for m, cmd in enumerate(row):
+				if m:
+					yield level, "------"
+				yield from (_v for (_l, _v) in enumerate(cmd._print(level)) if _l)
+			yield level, "==--=="
+		
+		for n, row in enumerate(self.body):
+			for m, cmd in enumerate(row):
+				if m:
+					yield level, "------"
+				yield from (_v for (_l, _v) in enumerate(cmd._print(level)) if _l)
+			yield level, "======"
 
 
 class Clause(TypedRecord):
@@ -259,7 +281,13 @@ class Clause(TypedRecord):
 				raise KeyError(f"Clause with id `{id_}` not found.")
 	
 	def find_definition(self, id_):
+		if self.id_ == id_:
+			return self
+		
 		for paragraph in self.paragraphs:
+			if hasattr(paragraph, 'id_') and paragraph.id_ == id_:
+				return paragraph
+			
 			if not hasattr(paragraph, 'find_definition'):
 				continue
 			
@@ -417,7 +445,7 @@ class Specification:
 	
 	def find_ref(self, href):
 		if not href.startswith('#'):
-			raise ValueError
+			raise ValueError("Href must start with #, got: " + href)
 		
 		id_ = href[1:]
 		try:
@@ -542,7 +570,7 @@ class Specification:
 		elif xml.tag == f'{{{self.emu_namespace}}}alg':
 			yield self.algorithm(xml)
 		
-		elif xml.tag == f'{{{self.html_namespace}}}table':
+		elif xml.tag == f'{{{self.emu_namespace}}}table':
 			yield self.table(xml)
 		
 		elif xml.tag == f'{{{self.emu_namespace}}}grammar':
@@ -879,14 +907,19 @@ class Specification:
 		return Grammar(type_, tuple(productions))
 	
 	def table(self, xml):
-		if xml.tag != f'{{{self.html_namespace}}}table':
+		if xml.tag != f'{{{self.emu_namespace}}}table':
 			raise ValueError
 		
-		table = Table()
-		# TODO
+		#if 'id' not in xml.attrib:
+		#	print(xml_tounicode(xml))
+		
+		table = Table(xml.attrib['id'] if 'id' in xml.attrib else '')
+		
+		#print(xml.find.__doc__)
+		htable = xml.find('.//html:table', namespaces={'html':self.html_namespace, 'emu':self.emu_namespace})
 		
 		try:
-			thead = [_child for _child in xml if _child.tag == f'{{{self.html_namespace}}}thead'][0]
+			thead = [_child for _child in htable if _child.tag == f'{{{self.html_namespace}}}thead'][0]
 		except IndexError:
 			pass
 		else:
@@ -904,9 +937,9 @@ class Specification:
 				table.head.append(row)
 		
 		try:
-			tbody = [_child for _child in xml if _child.tag == f'{{{self.html_namespace}}}tbody'][0]
+			tbody = [_child for _child in htable if _child.tag == f'{{{self.html_namespace}}}tbody'][0]
 		except IndexError:
-			tbody = xml
+			tbody = htable
 		
 		for tr in tbody:
 			if tr.tag != f'{{{self.html_namespace}}}tr': continue
