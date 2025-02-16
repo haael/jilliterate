@@ -83,6 +83,8 @@ def render_cmd(index, content):
 			result[n] = "<method>"
 		elif result[n] == "<function>" and n < len(result) - 1 and result[n + 1] == "`modulo`":
 			result[n] = ""
+		elif result[n] == "<function>" and n < len(result) - 2 and result[n + 2] != "(":
+			result[n] = ""
 	yield None, index, " ".join(result)
 
 
@@ -269,16 +271,23 @@ def specification_evaluation(specification):
 				result.clear()
 
 
-def specification_abstract_operations(specification):
+def specification_abstract_operations(specification, restrict_to=None):
 	"Prepare the spec of abstract operations. Yields all operations from the spec one by one."
 	
 	for clause in specification.find_clauses_with_title_ending_with(")"):
-		if ("::" in clause.title) or ("." in clause.title):
+		title = clause.title
+		if title.startswith("Static Semantics: "):
+			title = title[18:]
+		if title.startswith("Runtime Semantics: "):
+			title = title[19:]
+		if ("::" in title) or ("." in title) or ("%" in title) or (" Operator " in title) or ("[[" in title):
 			continue
-		#if all(not clause.title.startswith(_name + " ") for _name in problematic_functions):
-		#	continue
-		#if all(not clause.title.startswith(_name + " ") for _name in ["BoundFunctionCreate"]):
-		#	continue
+		
+		if title.split(" ")[0] == 'CreateIntrinsics':
+			continue
+		
+		if (restrict_to is not None) and all(not title.split(" ")[0] == _name for _name in restrict_to):
+			continue
 		if not clause.paragraphs:
 			continue
 		
@@ -326,11 +335,13 @@ def specification_abstract_operations(specification):
 				result.append(line)
 		
 
-def specification_syntax_directed_operations(specification):
+def specification_syntax_directed_operations(specification, restrict_to=None):
 	"Prepare the spec of syntax-directed operations. Yields all operations from the spec. First yields the operation header, then all its subsections one by one, then the header of the next operation and so on."
 	
 	for clause in chain(specification.find_clauses_with_title_starting_with("Static Semantics:"), specification.find_clauses_with_title_starting_with("Runtime Semantics:")):
 		if clause.title.endswith(": SV") or clause.title.endswith(": MV") or clause.title.endswith(": TV") or clause.title.endswith(": TRV"):
+			continue
+		if (restrict_to is not None) and all(not clause.title.startswith(_name + " ") for _name in restrict_to):
 			continue
 		if not clause.paragraphs:
 			continue
@@ -359,7 +370,7 @@ def specification_syntax_directed_operations(specification):
 				result.clear()
 
 
-max_syntax_retries = 4
+max_syntax_retries = 3
 
 
 def generate_header(codegen, prompt, spec):
@@ -367,8 +378,10 @@ def generate_header(codegen, prompt, spec):
 	
 	personality = prompt[""] + prompt["Prototype"]
 	retries = max_syntax_retries
+	errors = []
 	while retries:
 		retries -= 1
+		print(spec)
 		result = codegen.request(personality, spec, '{"__kind":').strip()
 		print(result)
 		try:
@@ -381,19 +394,26 @@ def generate_header(codegen, prompt, spec):
 				else:
 					value = unparse(value)
 				types[key] = value
-		except (SyntaxError, AttributeError, IndexError, ValueError):
-			print("Syntax error!")
-			spec += " \nDon't make syntax errors! Place quotes around strings correctly! (\"STRING\")"
-			continue
-		else:
-			keys = frozenset(types.keys())
+			
+			keys = frozenset(types.keys()) | frozenset({types['__name']})
+			if '__name' not in keys or '__kind' not in keys:
+				raise ValueError("Missing __name or __kind.")
 			forbidden_keys = frozenset({'list', 'object', 'input', 'global', 'match', 'len', 'exec', 'set', 'map', 'next', 'min', 'max', 'str', 'type', 'async'})
 			if keys & forbidden_keys:
-				spec += " \nAppend underscore to the following argument names: " + ", ".join(keys & forbidden_keys) + "."
-				continue
+				raise SyntaxError("Forbidden variable names: " + ", ".join(repr(_x) for _x in (keys & forbidden_keys)))
+		
+		except (SyntaxError, AttributeError, KeyError, IndexError, ValueError) as error:
+			errors.append(error)
+			print("Syntax error!", error)
+			try:
+				spec += prompt[f"Prototype / Syntax Error {len(errors)}"]
+			except KeyError:
+				pass
+		
+		else:
 			break
 	else:
-		raise RuntimeError("Model makes too many syntax errors!")
+		raise ExceptionGroup("Model makes too many syntax errors in prototype.", errors)
 	
 	func_kind = types['__kind']
 	func_name = types['__name']
@@ -429,10 +449,15 @@ def generate_early_errors(codegen, prompt, spec, func_name, func_args, func_arg_
 		retries -= 1
 		code = codegen.request(personality, spec, prototype)
 		try:
-			ast_parse(code)
-		except SyntaxError as error:
+			t = ast_parse(code)
+			if len(t.body) != 1 or t.body[0].__class__.__name__ != 'FunctionDef':
+				raise ValueError
+		except (SyntaxError, ValueError) as error:
 			errors.append(error)
-			spec += " \n\nDo not make syntax errors. Use correct indentation."
+			try:
+				spec += prompt[f"Algorithm / Syntax Error {len(errors)}"]
+			except KeyError:
+				pass
 		else:
 			return code
 	else:
@@ -441,7 +466,7 @@ def generate_early_errors(codegen, prompt, spec, func_name, func_args, func_arg_
 
 def generate_evaluation(codegen, prompt, spec, func_name, func_args, func_arg_types, func_arg_optional, func_return_type):
 	"Ask AI to generate Evaluation."
-	personality = prompt[""] + prompt["Algorithm"] + prompt["Syntax Directed Operation"] + prompt["Evaluation"]
+	personality = prompt[""] + prompt["Algorithm"] + prompt["Syntax Directed Operation"] + prompt["Abstract Operation"] + prompt["Evaluation"]
 	prototype = 'def ' + func_name + '(' + ', '.join(_arg + ': ' + _type + (' = None' if _optional else '') for (_arg, _type, _optional) in zip(func_args, func_arg_types, func_arg_optional)) + ')' + ((' -> ' + func_return_type) if func_return_type else '') + ':\n\t'
 	
 	errors = []
@@ -450,10 +475,15 @@ def generate_evaluation(codegen, prompt, spec, func_name, func_args, func_arg_ty
 		retries -= 1
 		code = codegen.request(personality, spec, prototype)
 		try:
-			ast_parse(code)
-		except SyntaxError as error:
+			t = ast_parse(code)
+			if len(t.body) != 1 or t.body[0].__class__.__name__ != 'FunctionDef':
+				raise ValueError
+		except (SyntaxError, ValueError) as error:
 			errors.append(error)
-			spec += " \n\nDo not make syntax errors. Use correct indentation."
+			try:
+				spec += prompt[f"Algorithm / Syntax Error {len(errors)}"]
+			except KeyError:
+				pass
 		else:
 			return code
 	else:
@@ -462,7 +492,7 @@ def generate_evaluation(codegen, prompt, spec, func_name, func_args, func_arg_ty
 
 def generate_condition(codegen, prompt, spec, func_name, func_args, func_arg_types, func_arg_optional, func_return_type):
 	"Ask AI to generate a single subsection of a syntax-directed operation."
-	personality = prompt[""] + prompt["Algorithm"] + prompt["Syntax Directed Operation"] + prompt["Abstract Operation"]
+	personality = prompt[""] + prompt["Algorithm"] + prompt["Syntax Directed Operation"] + prompt["Abstract Operation"] + func_prompt.get(func_name, "")
 	prototype = 'def ' + func_name + '(' + ', '.join(_arg + ': ' + _type + (' = None' if _optional else '') for (_arg, _type, _optional) in zip(func_args, func_arg_types, func_arg_optional)) + ')' + ((' -> ' + func_return_type) if func_return_type else '') + ':\n\t'
 	
 	errors = []
@@ -471,10 +501,15 @@ def generate_condition(codegen, prompt, spec, func_name, func_args, func_arg_typ
 		retries -= 1
 		code = codegen.request(personality, spec, prototype)
 		try:
-			ast_parse(code)
-		except SyntaxError as error:
+			t = ast_parse(code)
+			if len(t.body) != 1 or t.body[0].__class__.__name__ != 'FunctionDef':
+				raise ValueError
+		except (SyntaxError, ValueError) as error:
 			errors.append(error)
-			spec += " \n\nDo not make syntax errors. Use correct indentation."
+			try:
+				spec += prompt[f"Algorithm / Syntax Error {len(errors)}"]
+			except KeyError:
+				pass
 		else:
 			return code
 	else:
@@ -483,7 +518,7 @@ def generate_condition(codegen, prompt, spec, func_name, func_args, func_arg_typ
 
 def generate_algorithm(codegen, prompt, spec, func_name, func_args, func_arg_types, func_arg_optional, func_return_type):
 	"Ask AI to generate a single abstract operation."
-	personality = prompt[""] + prompt["Algorithm"] + prompt["Abstract Operation"]
+	personality = prompt[""] + prompt["Algorithm"] + prompt["Abstract Operation"] + func_prompt.get(func_name, "")
 	prototype = 'def ' + func_name + '(' + ', '.join(_arg + ': ' + _type + (' = None' if _optional else '') for (_arg, _type, _optional) in zip(func_args, func_arg_types, func_arg_optional)) + ')' + ((' -> ' + func_return_type) if func_return_type else '') + ':\n\t'
 	
 	errors = []
@@ -492,11 +527,16 @@ def generate_algorithm(codegen, prompt, spec, func_name, func_args, func_arg_typ
 		retries -= 1
 		code = codegen.request(personality, spec, prototype)
 		try:
-			ast_parse(code)
-		except SyntaxError as error:
+			t = ast_parse(code)
+			if len(t.body) != 1 or t.body[0].__class__.__name__ != 'FunctionDef':
+				raise ValueError
+		except (SyntaxError, ValueError) as error:
 			errors.append(error)
 			print(code)
-			spec += " \n\nDo not make syntax errors. Use correct indentation."
+			try:
+				spec += prompt[f"Algorithm / Syntax Error {len(errors)}"]
+			except KeyError:
+				pass
 		else:
 			return code
 	else:
@@ -521,14 +561,14 @@ def tee_files(*filenames, print_=True):
 	return decor
 
 
-def compile_abstract_operations(specification, codegen, prompt):
+def compile_abstract_operations(specification, codegen, prompt, restrict_to=None):
 	yield "#!/usr/bin/python3"
 	yield ""
 	yield ""
 	yield "from definitions import *"
 	yield ""
 	yield ""
-	for stype, spec in specification_abstract_operations(specification):
+	for stype, spec in specification_abstract_operations(specification, restrict_to):
 		if stype == 'head':
 			this_spec = '\t"""' + spec.replace("\\", "\\\\").replace("\n", " ").strip() + '"""'
 			func_kind, func_name, func_args, func_arg_types,  func_arg_optional, func_return_type = generate_header(codegen, prompt, spec)
@@ -570,8 +610,8 @@ def compile_early_errors(specification, codegen, prompt):
 		yield '"""'
 		n += 1
 		name = '_early_errors_' + roman(n).lower()
-		yield generate_early_errors(codegen, prompt, spec, name, ('self', 'goal'), ('Self', 'Nonterminal'), (False, False), '')
-		final_function.append(f"\tif {name}(self, goal) is not NotImplemented: return")
+		yield generate_early_errors(codegen, prompt, spec, name, ('self', 'goal'), ('Self', 'Nonterminal'), (False, False), 'List[Error["SyntaxError"]]')
+		final_function.append(f"\tif (errors := {name}(self, goal)) is not NotImplemented: return errors")
 		yield ""
 		yield ""
 	yield from final_function
@@ -610,7 +650,7 @@ def compile_evaluation(specification, codegen, prompt):
 	yield ""
 
 
-def compile_syntax_directed_operations(specification, codegen, prompt):
+def compile_syntax_directed_operations(specification, codegen, prompt, restrict_to=None):
 	yield "#!/usr/bin/python3"
 	yield ""
 	yield ""
@@ -623,7 +663,7 @@ def compile_syntax_directed_operations(specification, codegen, prompt):
 	n = None
 	final_class = []
 	final_function = []
-	for spec in specification_syntax_directed_operations(specification):
+	for spec in specification_syntax_directed_operations(specification, restrict_to):
 		if spec.startswith("The syntax - directed operation "):
 			if final_function:
 				final_function.append(f"\traise NotImplementedError('{func_name}')")
@@ -682,12 +722,28 @@ if __name__ == '__main__':
 	
 	prompt_doc = xml_frombytes(Path('prompt.xml').read_bytes())
 	prompt = {}
+	func_prompt = {}
 	for child in prompt_doc:
-		context = child.attrib.get('context', "")
-		text = [child.text]
-		for subchild in child:
-			text.append(subchild.tail)
-		prompt[context] = "\n".join(text)
+		if child.tag == 'prompt':
+			context = child.attrib.get('context', "")
+			text = [child.text]
+			for subchild in child:
+				text.append(subchild.tail)
+			prompt[context] = "\n".join(text)
+			
+			for subchild in prompt_doc:
+				if subchild.tag != 'line': continue
+				subcontext = subchild.attrib.get('context', "")
+				text = [subchild.text]
+				for subsubchild in subchild:
+					text.append(subsubchild.tail)
+				prompt[context + " / " + subcontext] = "\n".join(text)
+		elif child.tag == 'function':
+			text = [child.text]
+			for subchild in child:
+				text.append(subchild.tail)
+			func_prompt[child.attrib['name']] = "\n".join(text)
+	
 	del prompt_doc
 	
 	
@@ -704,12 +760,16 @@ if __name__ == '__main__':
 	
 	dest_dir = Path('gencode')
 	dest_dir.mkdir(exist_ok=True)
-
-	problematic_functions = ["Set", "PutValue", "CreateArrayIterator", "DoWait", "NewPromiseReactionJob", "MinFromTime", "TimeWithinDay", "Day", "GetValueFromBuffer", "SetValueInBuffer", "GetRawBytesFromSharedBlock"]
+	
+	problematic_functions = None
+	#problematic_functions = ["ParseText"]
+	#problematic_functions += ["Set", "PutValue", "CreateArrayIterator", "DoWait", "NewPromiseReactionJob", "MinFromTime", "TimeWithinDay", "Day", "GetValueFromBuffer", "SetValueInBuffer", "GetRawBytesFromSharedBlock"]
+	#problematic_functions += ["EvaluateNew", "InitializeReferencedBinding", "NumberBitwiseOp"]
+	#problematic_functions += ["MakeTime", "YearFromTime"]
 	
 	verbose = True
-	#tee_files(dest_dir / 'ao_library.py', print_=verbose)(compile_abstract_operations)(specification, codegen, prompt)
+	tee_files(dest_dir / 'ao_library.py', print_=verbose)(compile_abstract_operations)(specification, codegen, prompt, problematic_functions)
 	#tee_files(dest_dir / 'early_errors.py', print_=verbose)(compile_early_errors)(specification, codegen, prompt)
 	#tee_files(dest_dir / 'evaluation.py', print_=verbose)(compile_evaluation)(specification, codegen, prompt)
-	tee_files(dest_dir / 'sdo_library.py', print_=verbose)(compile_syntax_directed_operations)(specification, codegen, prompt)
+	#tee_files(dest_dir / 'sdo_library.py', print_=verbose)(compile_syntax_directed_operations)(specification, codegen, prompt, problematic_functions)
 

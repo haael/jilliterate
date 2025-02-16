@@ -27,6 +27,7 @@ def function():
    Rename variable or attribute `match` to `match_`.
    Rename variable or attribute `len` to `len_`.
    Rename variable or attribute `exec` to `exec_`.
+   Rename variable or attribute `eval` to `eval_`.
    Rename variable or attribute `set` to `set_`.
    Rename variable or attribute `map` to `map_`.
    Rename variable or attribute `next` to `next_`.
@@ -61,9 +62,14 @@ def function():
     Convert argument name `"type":TYPE` to `"type_":TYPE`.
     Convert argument name `"set":TYPE` to `"set_":TYPE`.
     Convert argument name `"match":TYPE` to `"match_":TYPE`.
+    Convert argument name `"map":TYPE` to `"map_":TYPE`.
    The return type, if present, is provided in the last element as: `"return": RETURN_TYPE`.
   I.e.: `{"__kind":"FUNCTION_KIND", "__name":"FUNCTION_NAME", "ARG1":TYPE1, "ARG2":TYPE2, ..., "return":RETURN_TYPE}`.
   Make sure TYPE1, TYPE2, ... and RETURN_TYPE are not strings but identifiers.
+
+  When you see a phrase "`min` ( a Number )" it should result in argument spec: `"min_":Number`.
+  When you see a phrase "`type` ( a TypedArray element type )" it should result in argument spec: `"type_":TypedArrayElementType`.
+  When you see a phrase "`map` ( an ECMAScript language value )" it should result in argument spec: `"map_":LanguageValue`.
 
   An "abstract operation" is just a regular function. Use FUNCTION_KIND = "abstract operation".
    If the function name of the abstract operation contains double colon ("::") replace it with a dot ("."), so "NAME1 : : NAME2" becomes `NAME1.NAME2`.
@@ -154,12 +160,17 @@ def function():
   If none of the rules above apply and a type spec ends with "Record", include that "Record" as part of the type name. I.e. "Some Thing Record" should be `SomeThingRecord`.
   If none of the rules above apply and a multi-word type description ends with "Object", remove the final word "Object" from the type name. I.e. "Some Thing Object" should be just `SomeThing` (skipping "Object").
 
-  As a special case, if the spec says "The abstract operation Set ...", replace the function name with "Set_", so use: `{"__kind":"abstract operation", "__name":"Set_", ...}`.
-   This is to distinguish the function from type name. Function name should be "Set_" and type name should be "Set".
+  If the spec says "The abstract operation Set ...", replace the function name with "Set_", so use: `{"__kind":"abstract operation", "__name":"Set_", ...}`. This is to distinguish the function from type name. Function name should be "Set_" and type name should be "Set".
+  If the spec says "The abstract operation Map ...", replace the function name with "Map_", so use: `{"__kind":"abstract operation", "__name":"Map_", ...}`. This is to distinguish the function from type name. Function name should be "Map_" and type name should be "Map".
+  If the spec says "The abstract operation eval ...", replace the function name with "eval_", so use: `{"__kind":"abstract operation", "__name":"eval_", ...}`.
 
   Example:
    If you receive the input: "The syntax - directed operation Evaluation takes no arguments and returns a Completion Record ."
    respond with: `{"__kind":"syntax-directed operation", "__name":"Evaluation", "self":Self, "return": CompletionRecord}`
+
+  <line context="Syntax error 1">Return a well-formed Python dict. Append underscore to argument names that are reserved words (async, match, break, continue) or standard function names (map, min, max, str, list).</line>
+  <line context="Syntax error 2">Double check for syntax errors. Output text that is correctly formatted Python code. Make sure the returned dict has keys "__kind" and "__name". If one of the dict keys is "min", change it to "min_".</line>
+  <line context="Syntax error 3">FOR GOD'S SAKE, DO NOT MAKE SYNTAX ERRORS FOR ONCE, PLEASE!</line>
  </prompt>
 
  <prompt context="Algorithm">
@@ -192,9 +203,6 @@ def function():
   The special expression "+ 0 ( 𝔽 )" means `+Zero` and the special expression "- 0 ( 𝔽 )" and "_ 0" means `-Zero`, but if "0" appears in other context just use literal `0`.
   The constant "NaN" is just `NaN`.
 
-  When the spec says "&lt;function&gt; `FUNCNAME`" without braces it means to call FUNCNAME with empty argument list: `FUNCNAME()`.
-  I.e. "&lt;function&gt; `msPerDay`" means `msPerDay()`.
-
   When testing if "`VARIABLE` is undefined", use equality operator: `VARIABLE == Undefined`.
   When testing if "`VARIABLE` is null", use equality operator: `VARIABLE == Null`.
   When testing if "`VARIABLE` is + 0 ( 𝔽 )", use equality operator: `VARIABLE == +Zero`.
@@ -212,26 +220,79 @@ def function():
   To check if a VALUE is an "abrupt completion", test if its `Type` attribute is not equal to `Constant.normal`.
   Whenever the specification line starts with "Note : TEXT" insert a comment into generated code (like `# TEXT`) containing the rest of the spec line.
 
-  Whenever some "let" or "set" statement contains the token "&lt;return_if_abrupt&gt;", check if the result VARIABLE (keep the original variable name) is an abrupt completion.
-   If yes, return the value from the function.
-   If no, substitute the value with the attribute `Value` of the value.
-  Example: "let `VARIABLE` be &lt;return_if_abrupt&gt; &lt;function&gt; ..." or "let `VARIABLE` be ? &lt;method&gt; ..."  ->  `VARIABLE = ...\nif VARIABLE.Type != Constant.normal:\n\treturn VARIABLE\nelse:\n\tVARIABLE = VARIABLE.Value`.
+  Whenever some "let" or "set" statement contains the token "&lt;return_if_abrupt&gt;", save the result to some temporary variable TEMPVAR (use some unique name like `result_NUM = ...`) and check if the call result is an abrupt completion.
+   If yes, return the result TEMPVAR from the function.
+   If no, take the attribute `Value` of TEMPVAR and assign it to VARIABLE.
+   Example:
+    "let `VARIABLE` be &lt;return_if_abrupt&gt; &lt;function&gt; ..." or
+    "let `VARIABLE` be &lt;return_if_abrupt&gt; &lt;method&gt; ..." should give:
+```
+	TEMPVAR = ...
+	if TEMPVAR.Type != Constant.normal:
+		return TEMPVAR
+	else:
+		VARIABLE = TEMPVAR.Value
+```
+   Likewise, "Let `ref` be &lt;return_if_abrupt&gt; &lt;method&gt; `Evaluation` of `constructExpr`" should give:
+```
+	TEMPVAR = constructExpr.Evaluation()
+	if TEMPVAR.Type != Constant.normal:
+		return TEMPVAR
+	else:
+		ref = TEMPVAR.Value
+```
 
-  Whenever a "perform" statement contains the token "&lt;return_if_abrupt&gt;", save the result to some VARIABLE with unique temporary name (prepend `result_NUM = `) and check if it is an abrupt completion.
-   If yes, return the value from the function.
-  Example: "perform &lt;return_if_abrupt&gt; &lt;function&gt; ..." or "perform &lt;return_if_abrupt&gt; &lt;method&gt; ..."  ->  `VARIABLE = ...\nif VARIABLE.Type != Constant.normal:\n\treturn VARIABLE`.
+  Whenever a "perform" statement contains the token "&lt;return_if_abrupt&gt;", save the result to some TEMPVAR with unique temporary name (i.e. `result_NUM = ...`) and check if it is an abrupt completion. If yes, return the value from the function.
+  Example:
+   "perform &lt;return_if_abrupt&gt; &lt;function&gt; ..." or
+   "perform &lt;return_if_abrupt&gt; &lt;method&gt; ..."  should give:
+```
+	TEMPVAR = ... # perform
+	if TEMPVAR.Type != Constant.normal:
+		return TEMPVAR
+```
 
   Whenever a "return" statement contains the token "&lt;return_if_abrupt&gt;" no special action is needed; just return the result unmodified. Do not extract fields nor create `CompletionRecord`; it will be done automatically.
   Do not create `CompletionRecord` unless explicitly told so.
+   "return &lt;return_if_abrupt&gt; &lt;function&gt; CALL ( ... )" should give:
+```
+	return CALL(...) # abrupt completions are handled automatically
+```
+  Likewise, "Return &lt;return_if_abrupt&gt; `base` . InitializeBinding ( `V` . `ReferencedName` , `W` )" should give:
+```
+	return base.InitializeBinding(V.ReferencedName , W) # abrupt completions are handled automatically
+```
+  Likewise, "Return &lt;return_if_abrupt&gt; &lt;method&gt; `EvaluateBody` of `F` . `ECMAScriptCode` with arguments `F` and `argumentsList` ." should give:
+```
+	return F.ECMAScriptCode.EvaluateBody(F, argumentList)
+```
+  Likewise, "Return &lt;return_if_abrupt&gt; &lt;function&gt; `EvaluateStringOrNumericBinaryExpression` ( Nonterminal('BitwiseORExpression') , Terminal('|') , Nonterminal('BitwiseXORExpression') ) ." should give:
+```
+	return EvaluateStringOrNumericBinaryExpression(Nonterminal('BitwiseORExpression'), Terminal('|'), Nonterminal('BitwiseXORExpression'))
+```
 
-  Whenever some "let" or "set" statement contains the token "&lt;raise_if_abrupt&gt;", check if the result VARIABLE (keep the original variable name) is an abrupt completion.
-   If yes, raise RuntimeError.
-   If no, substitute the value with the attribute `Value` of the value.
-  Example: "let `VARIABLE` be &lt;raise_if_abrupt&gt; &lt;function&gt; `ArrayCreate` ( ... )"  ->  `VARIABLE = ArrayCreate (...)\nif VARIABLE.Type != Constant.normal:\n\traise RuntimeError("As per spec this function must return normal completion.")\nelse:\n\tVARIABLE = VARIABLE.Value`.
+  Whenever some "let" or "set" statement contains the token "&lt;raise_if_abrupt&gt;", save the result to some temporary variable TEMPVAR (use some unique name, i.e. `result_NUM = ...`) and check if it is an abrupt completion.
+   If yes, raise RuntimeError with error message referencing the function or method name that returned the abrupt completion.
+   If no, substitute the VARIABLE with the attribute `Value` of TEMPVAR.
+  Example:
+   "let `VARIABLE` be &lt;raise_if_abrupt&gt; &lt;function&gt; `ArrayCreate` ( ... )" should give:
+```
+	TEMPVAR = ArrayCreate (...)
+	if TEMPVAR.Type != Constant.normal:
+		raise RuntimeError("As per spec the function ArrayCreate must return normal completion.")
+	else:
+		VARIABLE = TEMPVAR.Value
+```
 
-  Whenever a "perform" statement contains the token "&lt;raise_if_abrupt&gt;", save the result to some VARIABLE with unique temporary name (prepend `result_NUM = `) and check if it is an abrupt completion.
-   If yes, raise RuntimeError.
-  Example: "perform &lt;raise_if_abrupt&gt; &lt;function&gt; `InitializeReferencedBinding` ( ... )"  ->  `VARIABLE = ... InitializeReferencedBinding(...)\nif VARIABLE.Type != Constant.normal:\n raise\tRuntimeError("As per spec this function must return normal completion.")`.
+  Whenever a "perform" statement contains the token "&lt;raise_if_abrupt&gt;", save the result to some TEMPVAR with unique temporary name (i.e. `result_NUM = ...`) and check if it is an abrupt completion.
+   If yes, raise RuntimeError with error message referencing the function or method name that returned the abrupt completion.
+  Example:
+   "perform &lt;raise_if_abrupt&gt; &lt;function&gt; `InitializeReferencedBinding` ( ... )" should give:
+```
+	TEMPVAR = InitializeReferencedBinding(...) # perform
+	if TEMPVAR.Type != Constant.normal:
+		raise RuntimeError("As per spec the function InitializeReferencedBinding must return normal completion.")
+```
 
   Whenever the specification says "&lt;function&gt; `𝔽` ( VALUE )" it means `Number(VALUE)`.
   Whenever the specification says "`VALUE` (𝔽)" it means `Number(VALUE)`.
@@ -275,96 +336,17 @@ def function():
   To obtain the current Realm Record use `current_realm()`.
   To obtain the Agent Record of the surrounding agent use `current_agent()`.
 
+  Keep terminal literals as they are, i.e. "Terminal('XXX')" in the spec should give `Terminal('XXX')` in the code.
   When comparing a string with a `Terminal`, check its `value` field, that is `STRING == TERMINAL.value`. Also, when checking if a `Terminal` is a member of string collection, use `TERMINAL.value in COLLECTION`.
   When comparing two `Terminal`s, use comparison operator: `TERMINAL1 == TERMINAL2`.
 
   Whenever the specification says "`VARIABLE` is not present", test it as `VARIABLE is None`. Similarly "`VARIABLE` is present" means `VARIABLE is not None`.
 
   To create a new ECMAScript function object call the constructor `Function`.
- </prompt>
 
- <prompt context="Syntax Directed Operation">
-  <!-- Prompt present in all requests to make a syntax-directed operation. SDOs are methods of the class `ParseNode` and therefore always have `self` argument. -->
-  <line context="First match">In case this production matches </line>
-  <line context="Next match"> or this production matches </line>
-  <line context="Match found">  perform the following steps:</line>
-  <line context="No match">Otherwise, in case this production does not match any of the Productions at the beginning, return `NotImplemented` at the end of the function.</line>
-
-  This is a syntax-directed operation. It begins with a match of `self` against one or more Production constants.
-  If `self` matches any of the Productions, perform the listed steps that follow.
-  If none of the Productions are matched, return `NotImplemented`.
-
-  Insert a line with the comment "# Testing for match..." before the "if" block.
-  Insert a line with the comment "# Match found" inside the "if" block.
-
-  So the whole function should follow the pattern:
-```
-def METHOD_NAME(self:Self, ARGS):
-	# Testing for match...
-
-	if self.matches(Production(SOMETHING1)) or \
-		self.matches(Production(SOMETHING2)):
-
-		# Match found
-
-		PERFORM_STEP_1
-		PERFORM_STEP_2
-
-		...
-	else:
-		return NotImplemented
-```
-
-  Whenever the specification says "this production", take it as `self`. "This production" always refers to the `self` argument.
-  To check if this production matches a `Production(...)` object, use `self.matches(Production(...))`.
-
-  When comparing a string with a `Nonterminal`, use `javascript_grammar.matches(STRING, NONTERMINAL)`.
-  When comparing a `Terminal` with a `Nonterminal`, use `javascript_grammar.matches(TERMINAL.value, NONTERMINAL)`.
-  When the specification says "`StringValue` of XXX is a Nonterminal('ReservedWord')", use `lexical_grammar.matches(XXX.StringValue(), Nonterminal('ReservedWord'))`.
-  When comparing two `Nonterminal`s, use comparison operator: `NONTERMINAL1 == NONTERMINAL2`;
-
-  Whenever the specification says that some non-string object X "is" a Nonterminal YYY, take it as `X.matches(Nonterminal('YYY'))`.
-  Whenever the specification says that some non-string object X "is matched by" a Nonterminal YYY, take it as `X.matches(Nonterminal('YYY'))`.
-
-  When other rules don't apply, take "Nonterminal('NAME')" as `self.get_subtree(Nonterminal('NAME'))`.
-  When other rules don't apply, take "Nth Nonterminal('NAME')" as `self.get_subtree(Nonterminal('NAME'), N)` where N is the number starting from 1. "First" means 1, "second" means 2, etc.
-  When other rules don't apply, take "this Nonterminal('NAME')" as `self.get_subtree(Nonterminal('NAME'), 0)`.
-  When other rules don't apply, take "a Nonterminal('NAME1') that is covered by Nonterminal('NAME2')" as `self.get_subtree(Nonterminal('NAME2')).get_subtree(Nonterminal('NAME1'))`.
-
-  Whenever the specification says "&lt;method&gt; `METHOD` of Nonterminal('NAME')" possibly with arguments ARGS, take it as `SUBTREE.METHOD(ARGS)` where SUBTREE is an object obtained through `self.get_subtree(...)` as in one of the rules above.
-  Whenever the specification says "( [ PARAM ] ) parameter was set" or "this production has ( [ PARAM ] ) parameter", take it as `self.has_param(PARAM)`.
-  To check if a "Nonterminal('NAME') is present", use `self.has_subtree(Nonterminal('NAME'))`.
-  To obtain source text of some object, use method `source()`.
-  To get all items matching Nonterminal('AAA') contained within Nonterminal('BBB'), use iteration: `for item in self.get_subtree(Nonterminal('BBB')).get_all_subtrees(Nonterminal('AAA'))`
-
-  Whenever the specification says "“COLUMN_NAME” column of Table NUMBER", take it as `Table_NUMBER`. Such tables contain lists of properties. To check if a VALUE matches them iterate like `any(VALUE.matches(_property["COLUMN_NAME"]) for _property in Table_NUMBER)`.
-  When the spec says about "Table 66" just iterate over `[_row[COLUMN_NAME] for _row in Table_66]`.
-  When the spec says about "Table 67" just iterate over `[_row[COLUMN_NAME] for _row in Table_67]`.
- </prompt>
-
- <prompt context="Early Errors">
-  <!--
-   Prompt present in all requests to make an "early errors" sub-procedure (a syntax-directed operation). These methods have `self` and `goal` arguments.
-   If the `self` parse node does not match any production, it should return `NotImplemented`.
-  -->
-  The `goal` argument is of type Nonterminal.
-  To check if a VALUE is some Unicode code point matched by the Nonterminal('XXX') lexical grammar production, use `lexical_grammar.matches(chr(VALUE), Nonterminal('XXX'))`.
-  To check if a character value VALUE is the numeric value of some code point matched by the Nonterminal('NONTERMINAL') lexical grammar production, use `lexical_grammar.matches(chr(VALUE), Nonterminal('XXX'))`.
-  To check if a goal symbol of the syntactic grammar is some nonterminal, compare the `goal` argument with the nonterminal using equality operator `==`.
-  Whenever the specification says "It is a Syntax Error if ...", test if the condition is met and raise `SyntaxError("SPEC_LINE")` if so. Put the error specification as SPEC_LINE, starting from "It is a Syntax Error...". Escape quote characters inside the string.
-  The phrase "any source text is matched by this production" always evaluates to true.
-  To check if the source text is being processed by a direct eval use `execution_context_stack[-1].is_direct_eval()`.
- </prompt>
-
- <prompt context="Evaluation">
-  <!--
-   Prompt present in all requests to make an "Evaluation" sub-procedure (a syntax-directed operation). These methods have `self` argument.
-   If the `self` parse node does not match any production, it should return `NotImplemented`.
-  -->
-  To check if debugging is enabled, call `is_debug_enabled()`.
-  To perform an implementation-defined debugging action, call the function `debug` (like: `result = debug()`) and then return the completion record `Completion(result)`.
-
-  Never return `CompletionRecord(Type=Constant.normal, Value=NotImplemented)`, just return `NotImplemented`.
+  <line context="Syntax error 1">Use correct indentation. Append underscore to identifiers that are reserved words (return, async, match, break, continue).</line>
+  <line context="Syntax error 2">Double check for syntax errors. Output text that is correctly formatted Python code.</line>
+  <line context="Syntax error 3">FOR GOD'S SAKE, DO NOT MAKE SYNTAX ERRORS FOR ONCE, PLEASE!</line>
  </prompt>
 
  <prompt context="Abstract Operation">
@@ -380,9 +362,16 @@ def METHOD_NAME(self:Self, ARGS):
   To check in a value is Null, use `value == Null`. To check if value is not Null, use `value != Null`.
   
   To test if a value is integer, use `isinstance(value, Number['int'])`.
-  To test if a value is finite, use `not isinstance(value, Number['inf'])`.
   To test if a VALUE is a Private Name, use `isinstance(VALUE, PrivateName)`.
   `GlobalSymbolRegistry` is a global variable.
+
+  To test if a value is finite, use `not isinstance(value, Number['inf'])`.
+  To test if a value is not finite, use `isinstance(value, Number['inf'])`.
+  Examples:
+   "`hour` is not finite" should give `isinstance(hour, Number['inf'])`
+   "`min` is not finite" should give `isinstance(min_, Number['inf'])`
+   "`sec` is not finite" should give `isinstance(sec, Number['inf'])`
+   "`ms` is not finite" should give `isinstance(ms, Number['inf'])`.
 
   To create an accessor property use the constructor with attribute names as arguments. The default attribute values are provided here: `AccessorProperty(Get=Undefined, Set=Undefined, Enumerable=False, Configurable=False)`.
   To create an data property use the constructor with attribute names as arguments. The default attribute values are provided here: `DataProperty(Value=Undefined, Writable=False, Enumerable=False, Configurable=False)`.
@@ -451,9 +440,153 @@ def CreateArrayIterator(array: Object, kind: Constant[{Constant.key_value, Const
   As a special case, convert the name of function "Set" to `Set_`. But when the spec says to "create a new set" then use constructor `Set` without underscore. `Set_` is a function and `Set` is a type name.
   I.e. use `Set_(globalObj, V.ReferencedName, W, False)`.
 
+  Change the function name `eval` to `eval_`.
+  Change the function name `Map` to `Map_`.
+
   Never use `mode == Constant.async`. Use `mode == Constant.async_` instead.
 
   The subexpression "&lt;method&gt; `ℝ` ( `t` / &lt;function&gt; `msPerDay` )" means `(t / msPerDay()).MV()`.
  </prompt>
+
+ <prompt context="Syntax Directed Operation">
+  <!-- Prompt present in all requests to make a syntax-directed operation. SDOs are methods of the class `ParseNode` and therefore always have `self` argument. -->
+  <line context="First match">In case this production matches </line>
+  <line context="Next match"> or this production matches </line>
+  <line context="Match found">  perform the following steps:</line>
+  <line context="No match">Otherwise, in case this production does not match any of the Productions at the beginning, return `NotImplemented` at the end of the function.</line>
+
+  This is a syntax-directed operation. It begins with a match of `self` against one or more Production constants.
+  If `self` matches any of the Productions, perform the listed steps that follow.
+  If none of the Productions are matched, return `NotImplemented`.
+
+  Insert a line with the comment "# Testing for match..." before the "if" block.
+  Insert a line with the comment "# Match found" inside the "if" block.
+
+  So the whole function should follow the pattern:
+```
+def METHOD_NAME(self:Self, ARGS):
+	# Testing for match...
+
+	if self.matches(Production(SOMETHING1)) or \
+		self.matches(Production(SOMETHING2)):
+
+		# Match found
+
+		PERFORM_STEP_1
+		PERFORM_STEP_2
+
+		...
+	else:
+		return NotImplemented
+```
+
+  Whenever the specification says "this production", take it as `self`. "This production" always refers to the `self` argument.
+  To check if this production matches a `Production(...)` object, use `self.matches(Production(...))`.
+
+  When comparing a string with a `Nonterminal`, use `javascript_grammar.matches(STRING, NONTERMINAL)`.
+  When comparing a `Terminal` with a `Nonterminal`, use `javascript_grammar.matches(TERMINAL.value, NONTERMINAL)`.
+  When the specification says "`StringValue` of XXX is a Nonterminal('ReservedWord')", use `lexical_grammar.matches(XXX.StringValue(), Nonterminal('ReservedWord'))`.
+  When comparing two `Nonterminal`s, use comparison operator: `NONTERMINAL1 == NONTERMINAL2`;
+
+  Whenever the specification says that some non-string object X "is" a Nonterminal YYY, take it as `X.matches(Nonterminal('YYY'))`.
+  Whenever the specification says that some non-string object X "is matched by" a Nonterminal YYY, take it as `X.matches(Nonterminal('YYY'))`.
+
+  When other rules don't apply, take "Nonterminal('NAME')" as `self.get_subtree(Nonterminal('NAME'))`.
+  When other rules don't apply, take "Nth Nonterminal('NAME')" as `self.get_subtree(Nonterminal('NAME'), N)` where N is the number starting from 1. "First" means 1, "second" means 2, etc.
+  When other rules don't apply, take "this Nonterminal('NAME')" as `self.get_subtree(Nonterminal('NAME'), 0)`.
+  When other rules don't apply, take "a Nonterminal('NAME1') that is covered by Nonterminal('NAME2')" as `self.get_subtree(Nonterminal('NAME2')).get_subtree(Nonterminal('NAME1'))`.
+
+  Whenever the specification says "&lt;method&gt; `METHOD` of Nonterminal('NAME')" possibly with arguments ARGS, take it as `SUBTREE.METHOD(ARGS)` where SUBTREE is an object obtained through `self.get_subtree(...)` as in one of the rules above.
+  Whenever the specification says "( [ PARAM ] ) parameter was set" or "this production has ( [ PARAM ] ) parameter", take it as `self.has_param(PARAM)`.
+  To check if a "Nonterminal('NAME') is present", use `self.has_subtree(Nonterminal('NAME'))`.
+  To obtain source text of some object, use method `source()`.
+  To get all items matching Nonterminal('AAA') contained within Nonterminal('BBB'), use iteration: `for item in self.get_subtree(Nonterminal('BBB')).get_all_subtrees(Nonterminal('AAA'))`
+
+  Whenever the specification says "“COLUMN_NAME” column of Table NUMBER", take it as `Table_NUMBER`. Such tables contain lists of properties. To check if a VALUE matches them iterate like `any(VALUE.matches(_property["COLUMN_NAME"]) for _property in Table_NUMBER)`.
+  When the spec says about "Table 66" just iterate over `[_row[COLUMN_NAME] for _row in Table_66]`.
+  When the spec says about "Table 67" just iterate over `[_row[COLUMN_NAME] for _row in Table_67]`.
+
+  When the spec says "Return &lt;return_if_abrupt&gt; &lt;method&gt; `LabelledEvaluation` of this Nonterminal('BreakableStatement') with argument `newLabelSet` ." it should result in:
+```
+	return self.get_subtree(Nonterminal('BreakableStatement'), 0).LabelledEvaluation(newLabelSet)
+```
+  When the spec says "&lt;method&gt; `LabelledEvaluation` of this Nonterminal('LabelledStatement') with argument « » ." it should give: `self.get_subtree(Nonterminal('LabelledStatement'), 0).LabelledEvaluation([])`.
+ </prompt>
+
+ <prompt context="Early Errors">
+  <!--
+   Prompt present in all requests to make an "early errors" sub-procedure (a syntax-directed operation). These methods have `self` and `goal` arguments.
+   If the `self` parse node does not match any production, it should return `NotImplemented`.
+  -->
+  This function returns List of Errors or `NotImplemented`.
+  The `goal` argument is of type Nonterminal.
+
+  If `self` matches any of the Productions, first create a list `errors`, then run the steps as in the specification, then return `errors`.
+
+  The whole function should follow the pattern:
+```
+def _early_errors(self:Self, goal:Nonterminal) -> List[Error["SyntaxError"]]:
+	# Testing for match...
+
+	if self.matches(Production(SOMETHING1)) or \
+		self.matches(Production(SOMETHING2)):
+
+		# Match found
+		
+		errors = [] # create the list with SyntaxErrors
+		
+		# Run the steps as in specification
+		PERFORM_STEP_1
+		PERFORM_STEP_2
+		...
+		
+		return errors # return the list of SyntaxErrors
+	else:
+		return NotImplemented
+```
+
+  To check if a VALUE is some Unicode code point matched by the Nonterminal('XXX') lexical grammar production, use `lexical_grammar.matches(chr(VALUE), Nonterminal('XXX'))`.
+  To check if a character value VALUE is the numeric value of some code point matched by the Nonterminal('NONTERMINAL') lexical grammar production, use `lexical_grammar.matches(chr(VALUE), Nonterminal('XXX'))`.
+  To check if a goal symbol of the syntactic grammar is some nonterminal, compare the `goal` argument with the nonterminal using equality operator `==`.
+  Whenever the specification says "It is a Syntax Error if ...", test if the condition is met and append `Error["SyntaxError"]("SPEC_LINE")` to `errors` if so. Put the error specification as SPEC_LINE, starting from "It is a Syntax Error...". Escape quote characters inside the string.
+  I.e. "It is a Syntax Error if &lt;function&gt; `IsStrict` ( this production ) is true and the &lt;method&gt; `StringValue` of `Identifier` is either 'arguments' or 'eval' ." should give:
+```
+if IsStrict(self) or Identifier.StringValue() in ["arguments", "eval"]:
+	errors.append(Error["SyntaxError"]("It is a Syntax Error if &lt;function&gt; `IsStrict` ( this production ) is true and the &lt;method&gt; `StringValue` of `Identifier` is either 'arguments' or 'eval' ."))
+```
+  Likewise: "It is a Syntax Error if &lt;method&gt; `HasDirectSuper` of Nonterminal('GeneratorMethod') is true ." should give:
+```
+if self.get_subtree(Nonterminal('GeneratorMethod')).HasDirectSuper():
+	errors.append(Error["SyntaxError"]("It is a Syntax Error if &lt;method&gt; `HasDirectSuper` of Nonterminal('GeneratorMethod') is true ."))
+```
+
+  The phrase "any source text is matched by this production" always evaluates to true.
+  To check if the source text is being processed by a direct eval use `execution_context_stack[-1].is_direct_eval()`.
+
+  To check if any element of COLLECTION_A also occurs in COLLECTION_B convert them to sets and check if their intersection is not empty: `if set(COLLECTION_A) &amp; set(COLLECTION_B): ...`.
+ </prompt>
+
+ <prompt context="Evaluation">
+  <!--
+   Prompt present in all requests to make an "Evaluation" sub-procedure (a syntax-directed operation). These methods have `self` argument.
+   If the `self` parse node does not match any production, it should return `NotImplemented`.
+  -->
+  To check if debugging is enabled, call `is_debug_enabled()`.
+  To perform an implementation-defined debugging action, call the function `debug` (like: `result = debug()`) and then return the completion record `Completion(result)`.
+
+  Never return `CompletionRecord(Type=Constant.normal, Value=NotImplemented)`, just return `NotImplemented`.
+ </prompt>
+
+ <function name="ParseText">
+  To parse a list of code points against a certain goal, use `javascript_grammar.parse(source, goal)`. This method returns a `ParseNode` or `None`.
+  If it returned `None`, that means the source text is not well formed. In that case, return `[Error["SyntaxError"]("Source text not well-formed.")]`. Insert a comment "source text failure". Assert that the returned value was `None`.
+  Otherwise, call the method `early_errors` on the ParseNode.
+  If the list of errors is empty, it means success and in that case return the ParseNode. Insert a comment "success"
+  If the list of errors is not empty, return it and end the function. Insert a comment "early_errors failure".
+ </function>
+
+ <function name="YearFromTime">
+  Do not make a closure. Start with year = 0 and iterate in a `while` loop to find the largest number as described in spec. Assert that the returned value is smaller or equal to the requested parameter.
+ </function>
 
 </codegen>
