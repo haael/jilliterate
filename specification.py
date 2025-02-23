@@ -42,6 +42,7 @@ class Cmd(TypedRecord):
 			d = self.datum.render(fn, path, index)
 		else:
 			d = None
+		#print(fn)
 		yield from fn(self, path, index, content=tokens, datum=d)
 	
 	constants = FilteringProperty('content', Constant)
@@ -324,6 +325,23 @@ class Clause(TypedRecord):
 		
 		raise KeyError(f"Definition with id `{id_}` not found.")
 	
+	def find_clause_with_chapter(self, chapter):
+		#print("clause", self.chapter, chapter)
+		if not self.chapter:
+			raise KeyError
+		elif self.chapter == chapter:
+			return self
+		elif len(chapter) > len(self.chapter) and self.chapter == chapter[:len(self.chapter)]:
+			for subclause in self.subclauses:
+				try:
+					return subclause.find_clause_with_chapter(chapter)
+				except KeyError:
+					pass
+			else:
+				raise KeyError
+		else:
+			raise KeyError
+	
 	def find_clauses_with_title(self, title):
 		if self.title == title:
 			yield self
@@ -372,6 +390,7 @@ class Specification:
 	
 	def __init__(self):
 		self.toplevel_clauses = []
+		#self.chapter_cache = {} # FIXME
 		#self.grammars = {}
 	
 	def _print(self, level=0):
@@ -434,6 +453,29 @@ class Specification:
 	def find_clauses_with_title(self, title):
 		for clause in self.toplevel_clauses:
 			yield from clause.find_clauses_with_title(title)
+	
+	def find_clause_with_chapter(self, chapter):
+		for clause in self.toplevel_clauses:
+			if clause.chapter == chapter:
+				return clause
+			elif len(chapter) > len(clause.chapter) and clause.chapter == chapter[:len(clause.chapter)]:
+				return clause.find_clause_with_chapter(chapter)
+		else:
+			raise KeyError("Chapter " + ".".join(str(_d) for _d in chapter) + " not found.")
+	
+	#def find_clause_with_chapter(self, chapter):
+	#	try:
+	#		return self.chapter_cache[chapter]
+	#	except KeyError:
+	#		pass
+	#	
+	#	for id_ in self.subclause_ids():
+	#		clause = self.find_clause(id_)
+	#		if clause.chapter == chapter:
+	#			self.chapter_cache[chapter] = clause
+	#			return clause
+	#	else:
+	#		raise KeyError
 	
 	def find_clauses_with_title_starting_with(self, title):
 		for clause in self.toplevel_clauses:
@@ -1114,12 +1156,16 @@ if __name__ == '__main__':
 		specification.parse(xml_frombytes(specfile.read_bytes()))
 	
 	assert specification.find_ref('#sec-completion-record-specification-type').title == "The Completion Record Specification Type"
+	assert specification.find_clause_with_chapter((6, 1, 2)).title == "The Null Type"
 	
 	#for clause in specification.find_clauses_with_title("Runtime Semantics: Evaluation"):
 	#	for level, line in clause._print():
 	#		print(" " * level + line)
 	#	print("")
 	
-	with Path('specification.pickle').open('wb') as fd:
+	pickle_dir = Path('pickle')
+	pickle_dir.mkdir(exist_ok=True)
+	
+	with (pickle_dir / 'specification.pickle').open('wb') as fd:
 		dump(specification, fd)
 	
