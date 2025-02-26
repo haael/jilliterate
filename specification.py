@@ -187,8 +187,8 @@ class Table(TypedRecord):
 	
 	def render(self, fn, path=(), index=()):
 		path = path + ('Table',)
-		head = ((col.render(fn, path, index + (m, n)) for (n, col) in row) for (m, row) in enumerate(self.head))
-		body = ((col.render(fn, path, index + (m, n)) for (n, col) in row) for (m, row) in enumerate(self.body))
+		head = ((col.render(fn, path, index + (m, n)) for (n, col) in enumerate(row)) for (m, row) in enumerate(self.head))
+		body = ((col.render(fn, path, index + (m, n)) for (n, col) in enumerate(row)) for (m, row) in enumerate(self.body))
 		yield from fn(self, path, index, head=head, body=body)
 	
 	constants = GatheringProperty('constants', ['head', 'body'])
@@ -808,11 +808,16 @@ class Specification:
 	
 	def rule(self, xml):
 		if xml.tag == f'{{{self.emu_namespace}}}t':
-			if len(xml) == 0:
-				rule = Terminal(self.extract_text(xml))
-				yield rule
-			else:
-				raise NotImplementedError(xml_tounicode(xml))
+			yield Terminal(xml.text)
+			for child in xml:
+				if child.tag == f'{{{self.emu_namespace}}}mods':
+					for opt in child:
+						if opt.tag == f'{{{self.emu_namespace}}}opt':
+							yield Option('opt', ())
+						else:
+							raise NotImplementedError(xml_tounicode(opt))
+				else:
+					raise NotImplementedError(xml_tounicode(child))
 		
 		elif xml.tag == f'{{{self.emu_namespace}}}nt':
 			if not 0 <= len(xml) <= 2:
@@ -821,8 +826,7 @@ class Specification:
 			if len(xml):
 				for n, child in enumerate(xml):
 					if n == 0 and child.tag == f'{{{self.html_namespace}}}a':
-						rule = Nonterminal(self.extract_text(child))
-						yield rule
+						yield Nonterminal(self.extract_text(child))
 					elif n == 1 and child.tag == f'{{{self.emu_namespace}}}mods':
 						for opt in child:
 							if opt.tag == f'{{{self.emu_namespace}}}opt':
@@ -836,7 +840,7 @@ class Specification:
 					else:
 						raise NotImplementedError(str(n) + " " + xml_tounicode(child))
 			else:
-				rule = Nonterminal(self.extract_text(xml))
+				yield Nonterminal(self.extract_text(xml))
 		
 		elif xml.tag == f'{{{self.emu_namespace}}}constraints':
 			pass

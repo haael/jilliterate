@@ -16,6 +16,9 @@ from tokens import *
 from specification import *
 
 
+CSI = "\x1B["
+
+
 pickle_dir = Path('pickle')
 
 forbidden_identifiers = frozenset({'len', 'min', 'next'})
@@ -39,22 +42,20 @@ class Kind(Enum):
 	unknown = 0
 	
 	abstract_operation = 1
-	concrete_operation = 2
-	syntax_directed_operation = 3
+	syntax_directed_operation = 2
+	method = 3
 	abstract_method = 4
-	concrete_method = 5
-	internal_method = 6
-	constructor = 7
-	operator = 8
+	constructor = 5
+	operator = 6
 	
-	plain = 9
-	struct = 10
-	enum = 11
-	union = 12
+	plain = 11
+	struct = 12
+	enum = 13
+	union = 14
 	
-	constant = 13
-	property_ = 14
-	prototype = 15
+	property_ = 21
+	slot = 22
+	relation = 23
 	
 	@classmethod
 	def typed_eval(cls, s):
@@ -199,7 +200,7 @@ def render_node(node, path, index, **kwargs):
 		else:
 			yield path[-1] + "(" + repr(node.value) + ")"
 	elif path[-1] == 'Enum_':
-		yield "<constant> " + repr(node.value)
+		yield "<enum> `" + str(node.value) + "`"
 		#yield "`Enum_." + node.value.replace('-', '_') + "`"
 	elif path[-1] in ['Variable', 'ObjectField']:
 		yield "`" + node.value + "`"
@@ -221,7 +222,7 @@ def render_node(node, path, index, **kwargs):
 			section = True
 		else:
 			section = False
-
+		
 		if kwargs['content'] is not None:
 			for token in kwargs['content']:
 				if isinstance(token, str):
@@ -253,9 +254,28 @@ def render_node(node, path, index, **kwargs):
 	elif path[-1] == 'Equation':
 		# TODO
 		yield '<equation>'
+	elif path[-1] == 'Definition':
+		# TODO
+		yield '<definition>'
 	elif path[-1] == 'Table':
 		# TODO
-		yield '<table>', (), ""
+		yield '<table>', (), "==== Table"
+		n = 0
+		for row in kwargs['head']:
+			k = []
+			for cell in row:
+				k.append(" ".join([str(_s) for _, _, _s in cell]))
+			yield '<table>', (n,), "\t" + " | ".join(k) + ""
+			n += 1
+		yield '<table>', (), "\t----"
+		for row in kwargs['body']:
+			k = []
+			for cell in row:
+				k.append(" ".join([str(_s) for _, _, _s in cell]))
+			yield '<table>', (n,), "\t" + " | ".join(k) + ""
+			n += 1
+		yield '<table>', (), "===="
+		#yield '<table>', (), ""
 	elif path[-1] == 'Paragraph':
 		for kind, idx, command in chain.from_iterable(kwargs['commands']):
 			assert isinstance(command, str)
@@ -394,6 +414,8 @@ def generate_dicts(codegen, retries, system_prompt, spec_prompt, error_prompts, 
 				result.append(dict_)
 		
 		except (SyntaxError, ValueError, KeyError, TypeError) as error:
+			print(CSI + "33m" + repr(response) + CSI + "0m")
+			print(CSI + "31;40m" + type(error).__name__ + ":" + CSI + "0m" + CSI + "31m" + " " + str(error) + CSI + "0m")
 			try:
 				spec_prompt += error_prompts[len(errors)]
 			except IndexError:
@@ -440,6 +462,8 @@ def generate_function(codegen, retries, system_prompt, spec_prompt, error_prompt
 			# TODO
 		
 		except (SyntaxError, ValueError, KeyError, TypeError) as error:
+			print(CSI + "33m" + repr(response) + CSI + "0m")
+			print(CSI + "31;40m" + type(error).__name__ + ":" + CSI + "0m" + CSI + "31m" + " " + str(error) + CSI + "0m")
 			try:
 				spec_prompt += error_prompts[len(errors)]
 			except IndexError:
@@ -457,12 +481,13 @@ def generate_spec(codegen, retries, prompt, spec, _recreate=None, _contains=None
 	"Ask AI to guess what the paragraph is about."
 	
 	if _recreate is not None and _recreate is not Ellipsis and 'generate_spec' in _recreate:
-		_recreate = ...
+		#_recreate = ...
+		pass
 	elif _recreate is not Ellipsis and _contains is not None and any((_token in spec) for _token in _contains):
 		_recreate = ...
 	
 	personality = prompt[""] + "\n\n" + prompt["Guess content"]
-	arg_types = {'category':Category, 'kind':Kind | None, 'name':str | None, 'superclass':str | None, 'subtypes':list | None, 'values':list | None, 'specification_type':bool | None, 'implementation_defined':bool | None}
+	arg_types = {'category':Category, 'kind':Kind | None, 'name':str | None, 'superclass':str | None, 'subtypes':list | None, 'values':list | None, 'specification_type':bool | None, 'implementation_defined':bool | None, 'class':str | None}
 	error_prompts = []
 	for n in range(retries):
 		try:
@@ -474,26 +499,41 @@ def generate_spec(codegen, retries, prompt, spec, _recreate=None, _contains=None
 	while retries >= 0:
 		responses = generate_dicts(codegen, retries, personality, spec, error_prompts, arg_types, forbidden_identifiers, None, _recreate=_recreate, _contains=_contains)
 		#print("responses:", repr(responses))
+		_recreate = ...
 		retries -= 1
 		
 		result = []
 		try:
 			for nn, response in enumerate(responses):
-				print("response", nn, response)
+				#print("response", nn, response)
 				category = response['category']
+				
+				try:
+					if "." in response['name']:
+						raise ValueError("Name must not contain dots.")
+				except KeyError:
+					pass
 				
 				if category == Category.informal:
 					result.append([category])
 				
 				elif category == Category.function:
 					kind = response.get('kind', Kind.unknown)
-					if kind not in frozenset({Kind.unknown, Kind.abstract_operation, Kind.concrete_operation, Kind.syntax_directed_operation, Kind.abstract_method, Kind.concrete_method, Kind.internal_method, Kind.constructor, Kind.operator}):
+					if kind not in frozenset({Kind.unknown, Kind.abstract_operation, Kind.syntax_directed_operation, Kind.method, Kind.abstract_method, Kind.constructor, Kind.operator}):
 						raise ValueError(f"{kind} is not a valid value for Category.function.")
 					
 					if kind == Kind.unknown:
 						result.append([category, kind])
+					elif kind in frozenset({Kind.abstract_operation, Kind.syntax_directed_operation, Kind.operator}):
+						if response['class'] is not None:
+							raise ValueError(f"'class' must be None.")
+						result.append([category, kind, response['name'], response['implementation_defined'], None])
+					elif kind in frozenset({Kind.method, Kind.abstract_method, Kind.constructor}):
+						if response['class'] is None:
+							raise ValueError(f"'class' is required for methods.")
+						result.append([category, kind, response['name'], response['implementation_defined'], response['class']])
 					else:
-						result.append([category, kind, response['name'], response['implementation_defined']])
+						raise ValueError(f"Unsupported kind: {kind}.")
 				
 				elif category == Category.type_:
 					kind = response.get('kind', Kind.unknown)
@@ -502,31 +542,63 @@ def generate_spec(codegen, retries, prompt, spec, _recreate=None, _contains=None
 					
 					if kind == Kind.unknown:
 						result.append([category, kind])
+					elif kind == Kind.plain:
+						if response['subtypes'] is not None:
+							raise ValueError(f"'subtypes' must be None.")
+						if response['values'] is not None:
+							raise ValueError(f"'values' must be None.")
+						#if response['superclass'] is not None:
+						#	raise ValueError(f"'superclass' must be None.")
+						result.append([category, kind, response['name'], response['superclass'], response['subtypes'], response['specification_type']])
 					elif kind == Kind.union:
 						if response['subtypes'] is None:
 							raise ValueError(f"'subtypes' required for union type.")
-						result.append([category, kind, response['name'], response['superclass'], response['subtypes'], response['specification_type']])
+						if response['values'] is not None:
+							raise ValueError(f"'values' must be None.")
+						if response['superclass'] is not None:
+							raise ValueError(f"'superclass' must be None.")
+						result.append([category, kind, response['name'], None, response['subtypes'], response['specification_type']])
 					elif kind == Kind.enum:
+						if response['subtypes'] is not None:
+							raise ValueError(f"'subtypes' must be None.")
 						if response['values'] is None:
 							raise ValueError(f"'values' required for enum type.")
+						if response['superclass'] is not None:
+							raise ValueError(f"'superclass' must be None.")
+						result.append([category, kind, response['name'], None, response['values'], response['specification_type']])
+					elif kind == Kind.struct:
+						if response['values'] is not None:
+							raise ValueError(f"'values' must be None.")
+						if response['subtypes'] is not None:
+							raise ValueError(f"'subtypes' must be None.")
+						if (response['superclass'] is None) and (response['name'] not in ["Object", "Record"]):
+							raise ValueError(f"'superclass' required for struct type.")
+						if (response['superclass'] is not None) and (response['name'] in ["Object", "Record"]):
+							raise ValueError(f"'superclass' must be None for Object and Record.")
 						result.append([category, kind, response['name'], response['superclass'], response['values'], response['specification_type']])
 					else:
-						result.append([category, kind, response['name'], response['superclass'], None, response['specification_type']])
+						raise ValueError
 				
 				elif category == Category.normative:
 					kind = response.get('kind', Kind.unknown)
-					if kind not in frozenset({Kind.unknown, Kind.constant, Kind.property_, Kind.prototype}):
+					if kind not in frozenset({Kind.unknown, Kind.slot, Kind.property_, Kind.relation}):
 						raise ValueError(f"{kind} is not a valid value for Category.normative.")
 					
 					if kind == Kind.unknown:
 						result.append([category, kind])
+					elif kind in frozenset({Kind.relation}):
+						result.append([category, kind, response['name'], None])
 					else:
-						result.append([category, kind, response['name']])
+						if response['class'] is None:
+							raise ValueError(f"'class' is required for properties and slots.")
+						result.append([category, kind, response['name'], response['class']])
 				
 				else:
 					raise ValueError
 		
-		except (SyntaxError, ValueError) as error:
+		except (SyntaxError, ValueError, KeyError) as error:
+			print(CSI + "33m" + repr(responses) + CSI + "0m")
+			print(CSI + "31;40m" + type(error).__name__ + ":" + CSI + "0m" + CSI + "31m" + " " + str(error) + CSI + "0m")
 			try:
 				spec += error_prompts[len(errors)]
 			except IndexError:
@@ -580,6 +652,7 @@ def generate_prototype(codegen, retries, prompt, spec, forbidden_identifiers, al
 				return_type = ''
 		
 		except (SyntaxError, ValueError) as error:
+			print(CSI + "31;40m" + type(error).__name__ + ":" + CSI + "0m" + CSI + "31m" + " " + str(error) + CSI + "0m")
 			try:
 				spec += error_prompts[len(errors)]
 			except IndexError:
@@ -751,8 +824,9 @@ if __name__ == '__main__':
 	unions = defaultdict(set)
 	enums = defaultdict(set)
 	classes = defaultdict(set)
-	functions = defaultdict(list)
-	constructors = defaultdict(list)
+	plains = defaultdict(set)
+	#functions = defaultdict(set)
+	attributes = defaultdict(lambda: defaultdict(set))
 	
 	do = False
 	last_chapter = None
@@ -767,40 +841,58 @@ if __name__ == '__main__':
 			continue
 		elif not isinstance(clause.paragraphs[0], Paragraph):
 			continue
-		elif len(clause.paragraphs[0].commands) >= 2:
-			text = list(clause.paragraphs[0].commands[0].render(render_node))[0][2] + " " + list(clause.paragraphs[0].commands[1].render(render_node))[0][2]
-		elif len(clause.paragraphs[0].commands) == 1:
-			text = list(clause.paragraphs[0].commands[0].render(render_node))[0][2]
+		elif len(clause.paragraphs[0].commands):
+			lines = ["\t" + _l.strip() for (_, _, _l) in clause.paragraphs[0].render(render_node)]
 		else:
 			continue
 		
-		text = text.strip()
-		if not text:
+		if not lines:
 			continue
 		
-		if text.startswith("See") or text.startswith("This function") or text.startswith("This method"):
-			etitle = extended_title(specification, last_chapter)
-			spec = etitle[-2] + " / " + ((clause.title + ": ") if clause.title else "") + text
-		else:
-			spec = ((clause.title + ": ") if clause.title else "") + text
+		etitle = extended_title(specification, last_chapter)
+		if clause.title and etitle[-1] != clause.title:
+			etitle.append(clause.title)
 		
-		print('.'.join(str(_d) for _d in clause.chapter), "", repr(spec))
-		for nn, result in enumerate(generate_spec(codegen, 3, prompt, spec, _recreate=recreate, _contains=contains)):
-			print("generated spec:", '.'.join(str(_d) for _d in last_chapter), result)
+		spec = []
+		spec.append("[ " + " / ".join(etitle[:-1]) + " ]")
+		spec.append("")
+		spec.append(etitle[-1] + ":")
+		spec.append("")
+		spec.extend(lines)
+		
+		text = "\n".join(spec)
+		
+		#if text.startswith("See") or text.startswith("This function") or text.startswith("This method"):
+		#	etitle = extended_title(specification, last_chapter)
+		#	spec = etitle[-2] + " / " + ((clause.title + ": ") if clause.title else "") + text
+		#else:
+		#	spec = ((clause.title + ": ") if clause.title else "") + text
+		
+		print('.'.join(str(_d) for _d in clause.chapter))
+		print(CSI + "34;40m" + text + CSI + "0m")
+		for nn, result in enumerate(generate_spec(codegen, 3, prompt, text, _recreate=recreate, _contains=contains)):
+			print("generated spec:", '.'.join(str(_d) for _d in last_chapter), nn, CSI + "36m" + repr(result) + CSI + "0m")
 			category = result[0]
+			if category == Category.informal:
+				continue
+			kind = result[1]
+			if kind == Kind.unknown:
+				continue
+			
 			if category == Category.function:
-				...
+				name = result[2]
+				implementation_defined = result[3]
+				class_name = result[4]
+				if class_name is not None:
+					attributes[class_name][kind].add(name)
+				else:
+					...
+			
 			elif category == Category.type_:
-				kind = result[1]
-				if kind == Kind.unknown:
-					continue
-				
 				name = result[2]
 				superclass = result[3]
 				specification_type = result[5]
 				if specification_type:
-					#print("spec!", name)
-					#if name != "SpecificationType": quit()
 					type_hierarchy['SpecificationType'].add(name)
 					unions['SpecificationType'].add(name)
 				
@@ -817,24 +909,38 @@ if __name__ == '__main__':
 						enums[name].update(values)
 					if superclass:
 						type_hierarchy[superclass].add(name)
-				else:
+				elif kind == Kind.struct:
 					name = result[2]
 					superclass = result[3]
 					if superclass:
 						type_hierarchy[superclass].add(name)
 					classes[name].add(clause.id_)
+				elif kind == Kind.plain:
+					name = result[2]
+					superclass = result[3]
+					if superclass:
+						type_hierarchy[superclass].add(name)
+					plains[name].add(clause.id_)
+				else:
+					raise ValueError
+			
 			elif category == Category.normative:
-				...
+				name = result[2]
+				class_name = result[3]
+				if class_name is not None:
+					attributes[class_name][kind].add(name)
+			
 			else:
 				pass
 		print()
 	
 	# FIXME: change prompt instead
-	#type_hierarchy['LanguageValue'].add('Numeric')
-	#type_hierarchy['Object'].add('ArrayBuffer')
 	type_hierarchy['Object'].add('ExoticObject')
+	classes['ExoticObject']
+	type_hierarchy['LanguageValue'].add('Numeric')
 	#type_hierarchy['SpecificationType'].remove('ArrayIterator')
 	
+	# ECMA specification reuses same identifiers for different types, i.e. "Set" may mean set object, set specification type and the abstract operation "Set". Fix those ambiguities by appending "Object" to object types.
 	c = Counter()
 	for key, values in type_hierarchy.items():
 		if key in values:
@@ -866,11 +972,30 @@ if __name__ == '__main__':
 	#	print(branch)
 	
 	for duplicate in duplicates:
-		print(duplicate)
+		nonobject_parents = {}
+		object_parents = {}
+		
 		for branch in duplicate_branches:
 			if branch[-1] == duplicate:
-				print(branch)
-		print()
+				if 'Object' in branch:
+					object_parents[branch[-2]] = len(branch)
+				else:
+					nonobject_parents[branch[-2]] = len(branch)
+		
+		#print(duplicate, object_parents, nonobject_parents)
+		
+		if (object_parents and nonobject_parents):
+			for parent in list(object_parents.keys()):
+				type_hierarchy[parent].remove(duplicate)
+				type_hierarchy[parent].add(duplicate + 'Object')
+				del object_parents[parent]
+				classes[duplicate + 'Object'] = classes[duplicate]
+				del classes[duplicate]
+		
+		longest = max(chain(object_parents.values(), nonobject_parents.values()))
+		for parent, length in chain(object_parents.items(), nonobject_parents.items()):
+			if length != longest:
+				type_hierarchy[parent].remove(duplicate)
 	
 	#print(duplicates)
 	
@@ -879,20 +1004,176 @@ if __name__ == '__main__':
 	
 	toplevel = middle_top - middle_leaves
 	
-	print(toplevel)
-	print(duplicates)
+	assert toplevel == frozenset({'LanguageValue', 'SpecificationType'}), str(list(toplevel))
+	
+	c = Counter()
+	for key, values in type_hierarchy.items():
+		if key in values:
+			values.remove(key)
+		c.update(values)
+	duplicates = frozenset(_key for _key, _freq in c.items() if _freq >= 2)
+	
+	assert not duplicates, str(list(duplicates))
 	
 	#print(middle_leaves & middle_top)
 	#print('SpecificationType' in middle_leaves)
 	
 	
 	def print_tree(key, level=0):
-		print(" " * level + key)
-		for value in type_hierarchy[key]:
+		if key in classes:
+			print(" " * level + key, "(struct)")
+		elif key in unions:
+			print(" " * level + key, "(union)")
+		elif key in enums:
+			print(" " * level + key, "(enum)")
+		elif key in plains:
+			print(" " * level + key, "(plain)")
+		else:
+			#print(" " * level + key, "(unknown)")
+			raise ValueError("Uknown type: " + key)
+		
+		for value in sorted(type_hierarchy[key]):
 			print_tree(value, level + 1)
 	
-	for key in (toplevel):
+	print("Type hierarchy:")
+	for key in reversed(sorted(toplevel)):
 		print_tree(key)
+	print()
+	#quit()
+	
+	for classname in sorted(attributes.keys()):
+		#if '.' in classname:
+		#	#c = classname.split('.')
+		#	#if c[-1] == '__proto__': continue
+		#	#if c[0] == 'well_known': del c[0]
+		#	#if c[-1] == 'prototype': del c[-1]
+		#	#classname = '.'.join(c)
+		#	print(classname)
+		#	#for values in methods[classname]:
+		#	#	print("\t", *values)
+		#	print()
+		#
+		#elif classname not in type_hierarchy:
+		#	#raise ValueError(classname)
+		#	pass
+		#	print("missing", classname)
+		if True:
+			print(f"class {classname}:")
+			for value in attributes[classname][Kind.slot]:
+				print(f"\t{value}:object")
+			for value in attributes[classname][Kind.property_]:
+				print(f"\t{value}:object")
+			for value in attributes[classname][Kind.constructor]:
+				print("\t@classmethod")
+				print(f"\tdef {value}(cls):")
+				print("\t\tpass")
+				print("\t")
+			for value in attributes[classname][Kind.abstract_method]:
+				print(f"\tdef {value}(self):")
+				print("\t\tpass")
+				print("\t")
+			for value in attributes[classname][Kind.method]:
+				print(f"\tdef {value}(self):")
+				print("\t\tpass")
+				print("\t")
+			print()
+	
+	def generate_type(name, parent):
+		if name in unions:
+			pass
+		elif name in enums:
+			assert parent is None
+			print()
+			print(f"class {name}(Enum):")
+			for value in enums[name]:
+				print(f"\t{value} = auto()")
+			print()
+		elif name in classes:
+			print()
+			
+			if parent is None:
+				print(f"class {name}:")
+			else:
+				print(f"class {name}({parent}):")
+
+			for value in attributes[classname][Kind.slot]:
+				print(f"\t{value}:object")
+			for value in attributes[classname][Kind.property_]:
+				print(f"\t{value}:object")
+			for value in attributes[classname][Kind.constructor]:
+				print("\t@classmethod")
+				print(f"\tdef {value}(cls):")
+				print("\t\tpass")
+				print("\t")
+			for value in attributes[classname][Kind.abstract_method]:
+				print(f"\tdef {value}(self):")
+				print("\t\tpass")
+				print("\t")
+			for value in attributes[classname][Kind.method]:
+				print(f"\tdef {value}(self):")
+				print("\t\tpass")
+				print("\t")
+			
+			#print("\t\"\"\"")
+			#for id_ in classes[name]:
+			#	clause = specification.find_clause(id_)
+			#	for paragraph in clause.paragraphs:
+			#		for _, _, text in paragraph.render(render_node):
+			#			print("\t" + text)
+			#print("\t\"\"\"")
+			
+			#print("\tpass")
+			print()
+		elif name in plains:
+			print()
+			
+			if parent is None:
+				print(f"class {name}:")
+			else:
+				print(f"class {name}({parent}):")
+			
+			for value in attributes[classname][Kind.slot]:
+				print(f"\t{value}:object")
+			for value in attributes[classname][Kind.property_]:
+				print(f"\t{value}:object")
+			for value in attributes[classname][Kind.constructor]:
+				print("\t@classmethod")
+				print(f"\tdef {value}(cls):")
+				print("\t\tpass")
+				print("\t")
+			for value in attributes[classname][Kind.abstract_method]:
+				print(f"\tdef {value}(self):")
+				print("\t\tpass")
+				print("\t")
+			for value in attributes[classname][Kind.method]:
+				print(f"\tdef {value}(self):")
+				print("\t\tpass")
+				print("\t")
+
+			#print("\t\"\"\"")
+			#for id_ in plains[name]:
+			#	clause = specification.find_clause(id_)
+			#	for paragraph in clause.paragraphs:
+			#		for _, _, text in paragraph.render(render_node):
+			#			print("\t" + text)			
+			#print("\t\"\"\"")
+			
+			#print("\tpass")
+			print()
+		else:
+			raise ValueError(f"{name} is an unknown type")
+		
+		for value in type_hierarchy[name]:
+			generate_type(value, name if name not in unions else None)
+		
+		if name in unions:
+			print()
+			print(name + " = " + " | ".join(unions[name]))
+			print()
+	
+	for key in reversed(sorted(toplevel)):
+		generate_type(key, None)
+	
 	
 	#print()
 	#for name, subtypes in unions.items():

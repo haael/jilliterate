@@ -43,147 +43,279 @@ def function():
 
  <prompt context="Guess content">
   Based on the heading from a specification, try to guess what this chapter is about.
-  
   Output one or more dicts (one under another), according to the following schema:
   `{"category":Category.CAT, "kind":Kind.KIND, "name":"NAME"}`
   It is possible that the spec talks about more then one entity. In that case output more dicts, one under another, one for each entity.
+  The spec has format:
+```
+[ CONTEXT ]
+
+TITLE:
+
+	SPEC
+	SPEC
+	SPEC
+```
+  Consider TITLE, SPEC and CONTEXT (in that order) to determine category. Consider TITLE and SPEC to determine name. Consider SPEC, TITLE and CONTEXT to determine other attributes.
+  Note that CONTEXT should be ignored when determining name. Take name only from TITLE and SPEC.
+  Output information only about the specification explicitly provided.
   
   Category can be one of: `Category.function`, `Category.type_`, `Category.normative` or `Category.informal`. Category is an identifier, not a string.
   
-  If the spec line talks about some function, method, constructor, arguments, result type and steps to perform, the category is `Category.function`.
-  If the spec line talks about some type, object, record, possible values, subclasses, fields or attributes, the category is `Category.type_`.
-  If the spec line talks about some constant, literal, property or prototype, the category is `Category.normative`.
+  If the spec talks about some function, method, constructor, operator, arguments, result type and steps to perform, the category is `Category.function`.
+  If the spec talks about some type, object, record, possible values, subclasses, the category is `Category.type_`.
+  If the spec talks about some constant, literal, internal slot, property or prototype, the category is `Category.normative`.
   If none of the above holds and the spec line does not correspond to any programming concept, the category is `Category.informal`.
+  If the CONTEXT says it is a property and SPEC says it is a method, output dicts both for property (`Category.normative` / `Kind.property_`) and the function (`Category.function` / `Kind.method`).
   
   Allowed values for "kind" depend on the category:
-   For category `Category.function`, kind may be one of: `Kind.abstract_operation`, `Kind.concrete_operation`, `Kind.syntax_directed_operation`, `Kind.abstract_method`, `Kind.internal_method`, `Kind.concrete_method`, `Kind.constructor`, `Kind.operator` or `Kind.unknown`.
-   For category `Category.type_`, kind may be one of: `Kind.plain`, `Kind.struct`, `Kind.enum`, `Kind.union` or `Kind.unknown`.
-   For category `Category.normative`, kind may be one of: `Kind.constant`, `Kind.property_`, `Kind.prototype`, `Kind.requirements` or `Kind.unknown`.
+   For category `Category.function`, kind may be one of: `Kind.abstract_operation`, `Kind.syntax_directed_operation`, `Kind.method`, `Kind.abstract_method`, `Kind.constructor`, `Kind.operator` or `Kind.unknown`.
+   For category `Category.type_`, kind may be one of: `Kind.struct`, `Kind.enum`, `Kind.union`, `Kind.plain` or `Kind.unknown`.
+   For category `Category.normative`, kind may be one of: `Kind.property_`, `Kind.slot`, `Kind.relation` or `Kind.unknown`.
    For category `Category.informal`, kind may be only `Kind.unknown` (or the key may be skipped altogether).
   Kind is an identifier, not a string.
   
-  Add a name of the entity if it can be guessed from the specification. If not, skip the "name" field. Name is a string.
-   If the name contains a double colon ("::") replace it with a dot, i.e. "Number::multiply" becomes "Number.multiply".
-   If the name is contained in percent signs ("%") remove them and prepend "well_known." to the name, so "%TypedArray%" becomes "well_known.TypedArray".
-   If the name is contained in double square braces, i.e. "[[NAME]]" remove the square braces and leave the inner part only.
+  Add a name of the entity if it can be guessed from the specification. Name is a string.
+   If name can not be determined, the category is `Category.informal`.
+   If the name contains a double colon ("::") replace it with a dot, i.e. "Number::multiply" becomes "Number.multiply" (such symbol is an abstract method).
+   If the name is contained in double square braces, i.e. "[[NAME]]" remove the square braces and leave the inner part only (such symbol is an abstract method of a class that should be determined from CONTEXT).
+   If a standalone name is wrapped in percent signs "%NAME.WITH.DOTS%" (no other parts are present) it should be converted to "well_known.NAME.WITH.DOTS".
+   A name with square braces and percent signs, like: "OUTER.NAME [ %Symbol.IDENTIFIER% ]" should be converted to "OUTER.NAME._Symbol_IDENTIFIER" (dots in IDENTIFIER should be converted to underscores and one underscore should be prepended, keeping the case unchanged).
+   A name may be preceded by keyword "get" or "set". Ignore that keyword and consider only the latter part.
   
-  Rules for `Category.function`:
-   `{"category":Category.function, "kind":Kind.FUNCTION_KIND, "name":"FUNCTION_NAME", "implementation_defined":True/False}`
+  * Rules for `Category.function`:
+   `{"category":Category.function, "kind":Kind.FUNCTION_KIND, "name":"FUNCTION_NAME", "implementation_defined":True/False, "class":"CLASS"/None}`
+   Function is something that can be called.
+    Most functions list steps to call, introduced by a line "this function performs the following steps when called" or "it performs the following steps when called".
+    If the spec contains one of that lines, then category is `Category.function`.
+   If the TITLE contains braces with arguments, then this is a function.
    If the spec says "syntax - directed operation" then kind is `Kind.syntax_directed_operation`.
-   If the spec says "abstract operation" then kind is `Kind.abstract_operation`, however if the function name contains a double colon ("::") or a dot (".") then it is `Kind.abstract_method`.
-   If the name is contained in double braces ("[[FUNCTION_NAME]]") then the kind is `Kind.internal_method`.
-   If the spec says that the operation is "implementation - defined", "implementation - approximated" or "host - defined", then set the field "implementation_defined" to `True`. Otherwise set it to `False`.
-   If the spec says "concrete method", then kind is `Kind.concrete_method`.
-   If the spec says that this is a constructor, then kind is `Kind.constructor`.
    If the spec says that this is an operator, then kind is `Kind.operator`.
-   If the spec says that this is just a function (without mentioning "abstract"), then kind is `Kind.concrete_operation`, however if the function name contains a double colon ("::") or a dot (".") then it is `Kind.concrete_method`.
-   If the spec says that this is an operator, then kind is `Kind.operator`.
-    The operator's name should be converted to ASCII and should include valence, i.e. "unary +" should become `"unary_plus".
     If the spec mentions operator's prefix or postfix variant, it should be included too, i.e. "unary_prefix_plusplus".
+    The operator's name should be converted to ASCII and should include valence, i.e. "unary +" should become `"unary_plus".
     If the valence is not specified explicitly, it should be assumed that the operator is binary.
+   If the spec says that this is a constructor, then kind is `Kind.constructor`.
+   If the spec says that this is a "concrete method", then kind is `Kind.method`.
+   If the function name contains a dot (".") then kind is `Kind.method`.
+    Use only the last part as "name" and the part before as "class". I.e. if the function name is "Number.divide" then use `{"kind":Kind.method, "name":"divide", "class":"Number"}`.
+   If the spec says that this is an "internal method", then kind is `Kind.abstract_method`.
+   If the spec says "abstract operation" then kind is `Kind.abstract_operation`, however if the name contains double colon or double braces then it is `Kind.abstract_method`.
+    If the function name contains double colon ("::") or it is in double square braces ("[[NAME]]") then kind is `Kind.abstract_method`. But if the double-braced name appears only in the CONTEXT then ignore it.
+    Use only the last part as "name" and the part before as "class". I.e. if the function name is "Number::exponentiate" then use `{"kind":Kind.abstract_method, "name":"exponentiate", "class":"Number"}`.
+    Example: "[[Get]] ( P, Receiver ): The `Get` internal method" shoud give `Kind.abstract_method` with name "Get".
+   Constructors and methods belong to a class. Determine the class name and put them in the result dict under "class" key.
+    If the spec says "ordinary object" then the class is simply "Object".
+    If the class name is not explicitly stated, use the constructor name itself as the class name.
+   If the function has name of the form "BEFORE.PARTS [ %Symbol.IDENTIFIER% ]" then CLASS="BEFORE.PARTS" and NAME="_Symbol_IDENTIFIER".
+    Dots in "Symbol.IDENTIFIER" should be converted to underscores and one underscore should be prepended, keeping the case unchanged.
+    A function with the name of such form is of kind `Kind.method`.
+   The function name may be preceded by keyword "get" or "set". Ignore that keyword and consider only the latter part. Such function is always a method.
+    Example: "get ArrayBuffer [ %Symbol.species% ]" should be split into CLASS="ArrayBuffer" and NAME="_Symbol_species" (ignore "get").
+   If the name is multi-part (contains many dots) all the parts are the CLASS name except the last one, which is the NAME.
+    The CLASS may contain dots, the NAME can not.
+    Example: "ArrayBuffer.prototype.transferToFixedLength" should be split into CLASS="ArrayBuffer.prototype" and NAME="transferToFixedLength".
+   Abstract operations, syntax directed operations and operators do not belong to a class and the "class" key should be `None`.
+   If the spec says that the operation is "implementation - defined", "implementation - approximated" or "host - defined", then set the field "implementation_defined" to `True`. Otherwise set it to `False`.
    As a special case, if the spec says "Early Errors" or "Static semantics: Early Errors", the function name is `"early_errors"` and kind is `Kind.syntax_directed_operation`.
    As a special case, if the spec says "Evaluation" or "Runtime semantics: Evaluation", the function name is `"Evaluation"` and kind is `Kind.syntax_directed_operation`.
    As a special case, if the spec sats "Static Semantics: MV", the function name is `"MV"` and kind is `Kind.syntax_directed_operation`.
+   If the SPEC contains "The abstract operation ImportedLocalNames takes argument" then kind is `Kind.abstract_operation` and name is "ImportedLocalNames".
    If the function kind can not be determined, use `Kind.unknown`.
-  Examples:
-   "Number::exponentiate ( base, exponent ): The abstract operation Number : : exponentiate" should give `{"category":Category.function, "kind":Kind.abstract_method, "name":"Number.exponentiate", "implementation_defined":False}`
-   "StringIndexOf ( string, searchValue, fromIndex ) : The abstract operation StringIndexOf takes arguments ..." should give `{"category":Category.function, "kind":Kind.abstract_operation, "name":"StringIndexOf", "implementation_defined":False}`
-   "Static Semantics: MV: A numeric literal stands for a value of the Number type or the BigInt type ." should give `{"category":Category.function, "kind":Kind.syntax_directed_operation, "name":"MV", "implementation_defined":False}`
-   "EvalError: The EvalError constructor is % EvalError % ." should give `{"category":Category.function, "kind":Kind.constructor, "name":"well_known.EvalError", "implementation_defined":False}`
-   "Error ( message [ , options ] ): This function performs the following steps when called :" should give `{"category":Category.function, "kind":Kind.concrete_operation, "name":"Error", "implementation_defined":False}`
-   "Number ( value ): This function performs the following steps when called :" should give `{"category":Category.function, "kind":Kind.concrete_operation, "name":"Error", "implementation_defined":False}`
-   "Math.max ( ...args ): Given zero or more arguments , this function calls ..." should give `{"category":Category.function, "kind":Kind.concrete_method, "name":"Math.max", "implementation_defined":False}`
+   A method may be a property of some class. If the spec says that this is a property, then also emit a dict for the property, as described in "Rules for `Category.normative`.
+   Example 1:
+    "[ Ordinary and Exotic Objects Behaviours / Ordinary Object Internal Methods and Internal Slots / [[IsExtensible]] ( ) ] OrdinaryIsExtensible ( O ): The abstract operation OrdinaryIsExtensible"
+     should result in:
+    `{"category":Category.function, "kind":Kind.abstract_operation, "name":"OrdinaryIsExtensible", "implementation_defined":False, "class":None}`
+   Example 2:
+    "Ordinary and Exotic Objects Behaviours / Ordinary Object Internal Methods and Internal Slots ] [[Set]] ( P, V, Receiver ): The `Set` internal method of an ordinary object"
+     should result in:
+    `{"category":Category.function, "kind":Kind.method, "name":"Set", "implementation_defined":False, "class":"Object"}`
+   Example 3:
+    "Static Semantics: MV:"
+     should result in:
+    `{"category":Category.function, "kind":Kind.syntax_directed_operation, "name":"MV", "implementation_defined":False, "class":None}`
+
+   Example 4:
+"""
+[ Fundamental Objects / Error Objects / Native Error Types Used in This Standard ]
+
+RangeError:
+
+        The RangeError constructor is % RangeError % .
+"""
+   should give: `{"category":Category.function, "kind":Kind.constructor, "name":"RangeError", "implementation_defined":False, "class":"NativeError"}`
+
+   Example 5:
+"""
+[ Fundamental Objects / Error Objects ]
+
+The Error Constructor:
+
+        The Error constructor :
+"""
+   should give `{"category":Category.function, "kind":Kind.constructor, "name":"Error", "implementation_defined":False, "class":"Error"}`
+
+  Example 6:
+"""
+[ ECMAScript Data Types and Values / ECMAScript Language Types / The Object Type / Invariants of the Essential Internal Methods ]
+
+[[GetPrototypeOf]] ( ):
+
+        The normal return type is either Object or Null .
+"""
+   should give `{"category":Category.function, "kind":Kind.abstract_method, "name":"GetPrototypeOf", "implementation_defined":False, "class":"Object"}`
+
+   * Rules for `Category.type_`:
+    `{"category":Category.type_, "kind":Kind.TYPE_KIND, "name":"TYPE_NAME", "superclass":"SUPERCLASS"/None, "subtypes":["TYPE1","TYPE2",...], "values":["VALUE1","VALUE2",...], "specification_type":True/False}`
+    If the TITLE of the spec says about some type, like "Numeric Types", the this is a type specification.
+    TYPE_NAME should be made from the type description and converted to camel case. I.e. "Completion record" should give name `"CompletionRecord"`.
+     When the spec says about "language type" or "ECMAScript language types", use "LanguageValue".
+     The words "exotic" and "object" are not part of type name, so "bound function exotic object" should give type name "BoundFunction".
+     If the spec says "Arguments exotic object", simply use the type name "Arguments".
+     If the spec says "Immutable Prototype Exotic Objects", simply use the type name "ImmutablePrototype".
+     There is a union type "Error" (with class "Object") that has 2 subtypes (that are structs): "NativeError" and "AggregateError".
+    If the spec mentions that this is a specification type, set the field "specification_type" to `True`. If the phrase "specification type" is missing from the spec line, the key "specification_type" must be set to `False`: `{"specification_type":False}`
+    Hint: If the TITLE contains "ModuleRequest Records" then name is "ModuleRequest" and superclass is "Record".
+    Hint: The line about "Well-Known Symbols" should just give the record about "Symbol" type, not about any property.
+    Example: The following spec should return a declaration of "Error" union type:
+"""
+[ Fundamental Objects / Error Objects ]
+
+Native Error Types Used in This Standard:
+
+        A new instance of one of the `NativeError` objects below or of the AggregateError object is thrown when a runtime error is detected .
+        All `NativeError` objects share the same structure , as described in 20 . 5 . 6 .
+"""
+   should give: `{"category":Category.type_, "kind":Kind.union, "name":"Error", "subtypes":["NativeError", "AggregateError"], "values":None, "class":"Object"}`
+    
+    ** Rules for `Category.type_` / `Kind.struct`:
+     If the spec mentions "object", "record" or "interface", the kind is `Kind.struct`.
+     If the spec says this type has attributes, properties or internal slots, then this is a struct.
+     `{"kind":Kind.struct, name:"NAME", "superclass":"SUPERCLASS", "subtypes":None, "values":None, "specification_type":True/False}`
+     Try to determine superclass if it is mentioned. Add the superclass type name (a string).
+     For types "Object" and "Record", leave the superclass as `None`.
+     For object types, the superclass is another object type or "Object" (except the type "Object" itself that doesn't have a superclass).
+     If the spec says that a type is "exotic object" then its superclass is "ExoticObject".
+     If the spec says that a type is "ordinary object" then its superclass is simply "Object".
+     If the spec says that a type is an interface then its superclass is "Object".
+     For record types, the superclass is another record type or "Record" (except the type "Record" itself that doesn't have a superclass).
+      Example: "The ClassFieldDefinition Record Specification Type" `{"kind":Kind.struct, name:"ClassFieldDefinition", "superclass":"Record", "subtypes":None, "values":None, "specification_type":True}`
+     For error types, the superclass is "NativeError" (except the type "Error" itself whose superclass is "Object").
+     If the spec says about "Property Attributes", then it is a struct type. Use name "PropertyAttribute". `{"kind":Kind.struct, name:"PropertyAttribute", "superclass":None, "subtypes":None, "values":None, "specification_type":False}`
+     Type "GlobalObject" is a struct and has superclass "Object".
+     Type "TypedArray" is a struct and has superclass "Array".
+      The spec "[  ] The Global Object: The global object :" should give: `{"category":Category.type_, "kind":Kind.struct, name:"GlobalObject", "superclass":"Object", "subtypes":None, "values":None, "specification_type":False}`.
+     When the spec says about "SharedArrayBuffer" with fixed-length and growable variants, output a definition of the type "SharedArrayBuffer" (superclass "ArrayBuffer") and two constructors: "FixedLengthSharedArrayBuffer" and "GrowableSharedArrayBuffer".
+      The spec:
+"""
+Fixed-length and Growable SharedArrayBuffer Objects
+	A fixed-length SharedArrayBuffer is a SharedArrayBuffer whose byte length cannot change after creation.
+	A growable SharedArrayBuffer is a SharedArrayBuffer whose byte length may increase after creation via calls to SharedArrayBuffer.prototype.grow ( newLength ).
+"""
+     should give:
+```
+{"category":Category.type_, "kind":Kind.struct, name:"SharedArrayBuffer", "superclass":"ArrayBuffer", "subtypes":None, "values":None, "specification_type":False}
+{"category":Category.function, "kind":Kind.constructor, "name":"FixedLengthSharedArrayBuffer", "implementation_defined":False, "class":"SharedArrayBuffer"}
+{"category":Category.function, "kind":Kind.constructor, "name":"GrowableSharedArrayBuffer", "implementation_defined":False, "class":"SharedArrayBuffer"}
+```
+
+     The spec with TITLE "The List and Record Specification Types" should output two dict, one for the type "List" (a plain type) and one for "Record".
+      Example: "[ Control Abstraction Objects / AsyncGenerator Objects ] Properties of AsyncGenerator Instances: AsyncGenerator instances are initially created with the internal slots described below :"
+       should give: `{"category":Category.type_, "kind":Kind.struct, name:"AsyncGenerator", "superclass":"Object", "subtypes":None, "values":None, "specification_type":False}`.
+      Example: "[ ECMAScript Language: Scripts and Modules / Modules / Module Semantics ] Abstract Module Records: A Module Record encapsulates structural information ..." is an informal spec.
+       should give: `{"category":Category.type_, "kind":Kind.struct, name:"ModuleRecord", "superclass":"Record", "subtypes":None, "values":None, "specification_type":False}`.
+    
+    ** Rules for `Category.type_` / `Kind.union`:
+     If the spec lists some type names, then this is a union type.
+     `{"kind":Kind.union, name:"NAME", "superclass":None, "subtypes":["TYPE1", "TYPE2", ...], "values":None, "specification_type":True/False}`
+     Use kind `Kind.union`.
+     Add the listed type names under the key "subtypes".
+     Example: "ECMAScript has two built - in numeric types : Number and BigInt ." (Use type name "Numerc" here.)
+     Example: "ECMAScript Specification Types" is a union type. (Use type name "SpecificationType" here.)
+    
+    ** Rules for `Category.type_` / `Kind.enum`:
+     If the spec says that this type has one or more values and provides what they are called in apostrophes, then this is an enum type.
+     `{"kind":Kind.enum, name:"NAME", "superclass":None, "subtypes":None, "values":["VALUE1", "VALUE2", ...], "specification_type":True/False}`
+     Use kind `Kind.enum`.
+     For enum types add the listed values under the key "values". The values are listed in SPEC. Make a list of them and put them under the "values" key in the output dict.
+     The types: "Undefined", "Null" and "Boolean" are enums.
+    
+    ** Rules for `Category.type_` / `Kind.plain`:
+     If the type is not a struct, not an enum, nor a union, does not list subtypes and does not list values use kind `Kind.plain`.
+     Plain types must have "subtypes" and "values" set to `None`: `{"kind":Kind.plain, "name":"NAME", "superclass":None, "subtypes":None, "values":None, "specification_type":True/False}`
+     "List" is a plain type.
+     "DataBlock" is a plain type.
+     The spec with TITLE "The Set and Relation Specification Types" should output two dict, one for the type "Set" and one for "Relation".
+     If the spec says "job is an abstract closure" generate a type "JobAbstractClosure" (`Kind.plain`) with superclass "AbstractClosure".
+     The type name of an "abstract closure" is "AbstractClosure" (`Kind.plain`).
+    
+    ** Rules for `Category.type_` / `Kind.unknown`:
+     If the type kind can not be determined, use `Kind.unknown`.
   
-  Rules for `Category.type_`:
-   `{"category":Category.type_, "kind":Kind.TYPE_KIND, "name":"TYPE_NAME", "superclass":"SUPERCLASS"/None, "subtypes":["TYPE1","TYPE2",...], "values":["VALUE1","VALUE2",...], "specification_type":True/False}`
-   TYPE_NAME should be made from the type description and converted to camel case. I.e. "Completion record" should give name `"CompletionRecord"`.
-    If TYPE_NAME is "LanguageType", change it to "LanguageValue".
-    The words "exotic" and "object" are not part of type name, so "bound function exotic object" should give type name "BoundFunction".
-   If the type is an ordinary value type use kind `Kind.plain`.
-   If the spec mentions "object" or "record", the kind is `Kind.struct`.
-   Try to determine superclass if it is mentioned. Add the superclass type name (a string) or leave `None` if it can not be determined.
-    For object types, the superclass is another object type or "Object" (except the type "Object" itself that doesn't have a superclass).
-    If the spec says that a type is "exotic object" then its superclass is "ExoticObject".
-    For record types, the superclass is another record type or "Record" (except the type "Record" itself that doesn't have a superclass).
-    For error types, the superclass is "Error" (except the type "Error" itself whose superclass is "Object").
-    Hint: the type "ArrayBuffer" has superclass "Object".
-    Hint: the type "Numeric" has superclass "LanguageValue".
-    Hint: the type "ExoticObject" has superclass "Object".
-   If the spec lists other type names, use kind `Kind.union`. Add the listed type names under the key "subtypes". Otherwise leave "subtypes" as `None`.
-   If the spec lists value names, use kind `Kind.enum`. Add the listed value under the key "values". Otherwise leave "values" as `None`.
-   If the spec mentions that this is a specification type, set the field "specification_type" to `True`. If the phrase "specification type" is missing from the spec line, the key "specification_type" must be set to `False`: `{"specification_type":False}`
-   If the type kind can not be determined, use `Kind.unknown`.
-   If a type definition mentions any abstract operations, ignore them.
-  Examples:
-   "An ECMAScript language type corresponds to values that are directly manipulated by an ECMAScript programmer using the ECMAScript language . The ECMAScript language types are Undefined , ..." should give `{"category":Category.type_, "kind":Kind.union, "name":"LanguageValue", "superclass":None, "subtypes":["Undefined", ...], "values":None, "specification_type":False}`
-   "The Undefined Type: The Undefined type has exactly one value , called Constant(value='undefined') . Any variable that has not been assigned a value has the value Constant(value='undefined') ." should give `{"category":Category.type_, "kind":Kind.enum, "name":"Undefined", "superclass":None, "subtypes":None, "values":["undefined"], "specification_type":False}`
-   "The String type is the set of all ordered sequences of zero or more 16 - bit unsigned integer values ..." should give `{"category":Category.type_, "kind":Kind.plain, "name":"String", "superclass":None, "subtypes":None, "values":None, "specification_type":False}`
-   "ECMAScript has two built - in numeric types : Number and BigInt . The following abstract operations are defined over these numeric types ." should give `{"category":Category.type_, "kind":Kind.union, "name":"Numeric", "superclass":None, "subtypes":["Number", "BigInt"], "values":None, "specification_type":False}`
-   "The Number type has exactly 18,437,736,874,454,810,627 values ..." should give `{"category":Category.type_, "kind":Kind.plain, "name":"Number", "superclass":None, "subtypes":None, "values":None, "specification_type":False}`
-   "... Environment Record is an abstract class with three concrete subclasses : Declarative Environment Record , ... " should give `{"category":Category.type_, "kind":Kind.union, "name":"EnvironmentRecord", "superclass":"Record", "subtypes":["DeclarativeEnvironmentRecord", ...], "values":None, "specification_type":False}`
-   "Function Environment Records and Module Environment Records are subclasses of Declarative Environment Record ." should give `{"category":Category.type_, "kind":Kind.union, "name":"DeclarativeEnvironmentRecord", "superclass":"EnvironmentRecord", "subtypes":["FunctionEnvironmentRecord", "ModuleEnvironmentRecord"], "values":None, "specification_type":False}`
-   "A module namespace exotic object is an exotic object ..." should give `{"category":Category.type_, "kind":Kind.struct, "name":"ModuleNamespace", "superclass":"ExoticObject", "subtypes":None, "values":None, "specification_type":False}`
-   "Every Function instance is an ECMAScript function object ..." should give `{'category': Category.type_, 'kind': Kind.struct, 'name': 'Function', 'superclass': 'Object', 'subtypes': None, 'values': None, 'specification_type': False}`
-   "An immutable prototype exotic object is an exotic object ..." should give `{"category":Category.type_, "kind":Kind.struct, "name":"ImmutablePrototype", "superclass":"ExoticObject", "subtypes":None, "values":None, "specification_type":False}`
-   "The Enum Specification Type: Enums are values which are internal to the specification ..." should give `{"category":Category.type_, "kind":Kind.plain, "name":"Enum", "superclass":None, "subtypes":None, "values":None, "specification_type":True}`
-   "Set objects are collections of ECMAScript language values." should give `{"category":Category.type_, "kind":Kind.struct, "name":"SetObject", "superclass":"Object", "subtypes":None, "values":None, "specification_type":False}`
-   "The List and Record Specification Types: The List type is used to explain the evaluation of argument lists ..." should give `{"category":Category.type_, "kind":Kind.plain, "name":"List", "superclass":None, "subtypes":None, "values":None, "specification_type":True}\n{"category":Category.type_, "kind":Kind.struct, "name":"Record", "superclass":None, "subtypes":None, "values":None, "specification_type":True}`
-   "The Set and Relation Specification Types: The Set type is used to explain a collection of unordered elements for use in the memory model." should give `{"category":Category.type_, "kind":Kind.plain, "name":"Set", "superclass":None, "subtypes":None, "values":None, "specification_type":True}\n{"category":Category.type_, "kind":Kind.plain, "name":"Relation", "superclass":None, "subtypes":None, "values":None, "specification_type":True}`
-   "An Array Iterator is an object that represents a specific iteration over some specific Array instance object." should give `{"category":Category.type_, "kind":Kind.struct, "name":"ArrayIterator", "superclass":"Object", "subtypes":None, "values":None, "specification_type":False}`
-   "Script Records: A Script Record encapsulates information about a script being evaluated." should give `{"category":Category.type_, "kind":Kind.struct, "name":"ScriptRecord", "superclass":"Record", "subtypes":None, "values":None, "specification_type":False}`
-  
-  Rules for `Category.normative`:
-   `{"category":Category.normative, "kind":Kind.KIND, "name":"NAME"}`
-   If the spec says this is a property (outside name) or internal slot, then kind is `Kind.property_`.
-   If the spec says this is a prototype object (outside name), then kind is `Kind.prototype`.
-   If the spec says this is a constant or literal, then kind is `Kind.constant`.
+  * Rules for `Category.normative`:
+   `{"category":Category.normative, "kind":Kind.KIND, "name":"NAME", "class":"CLASS"/None}`
+   If the spec CONTEXT contains phrase "Properties of the CLASS Object", then it is a property declaration (unless it is a method).
+   If the spec CONTEXT contains phrase "Properties of the CLASS Constructor", then it is a property declaration (unless it is a method).
+   If the spec CONTEXT contains phrase "Function Properties of the CLASS Object", then it is a property declaration (unless it is a method).
+   Try to deduce the class name from the name of the entity or from description. Add the class name under the "class" key.
+    If the name contains a dot (".") then the NAME is the last part and all parts before are the CLASS name.
+    If the name is multi-part (contains many dots) all the parts are the CLASS name except the last one, which is the NAME.
+    The CLASS may contain dots, the NAME can not.
+    Example: "Object.prototype.hasOwnProperty" should be split into CLASS="Object.prototype" and NAME="hasOwnProperty".
+    Example: "Symbol.iterator" should be split into CLASS="Symbol" and NAME="iterator".
+    Example: "WeakMap.prototype.delete" should be split into CLASS="WeakMap.prototype" and NAME="delete".
+    If the class can not be determined, use `None`.
+    The name may be preceded by keyword "get" or "set". Ignore that keyword and consider only the latter part.
+     Example: "get ArrayBuffer.prototype.resizable" should be split into CLASS="ArrayBuffer.prototype" and NAME="resizable" (ignore "get").
+     Example: "get ArrayBuffer [ %Symbol.species% ]" should be split into CLASS="ArrayBuffer" and NAME="_Symbol_species" (ignore "get").
+   If the spec explicitly says this is an internal slot of some object, then kind is `Kind.slot`.
+   If the spec explicitly says this is a property (outside name) of some object, then kind is `Kind.property_`.
+    Note that instances of "Symbol" can be used as properties, but do not have properties themselves.
+   If the spec says this is a constant or literal, then kind is `Kind.property_`.
+   A property may be a method. If that is the case, emit a normative and function dict in the same response.
+   If the spec says this is a relation, then kind is `Kind.relation`.
+    For relations, class is `None`. Use `{"class":None}` in the resulting dict.
+    Replace hyphens ("-") with underscore ("_") in relation name.
+   If the entity has name of the form "BEFORE.PARTS [ %Symbol.IDENTIFIER% ]" then CLASS="BEFORE.PARTS" and NAME="_Symbol_IDENTIFIER".
+    Dots in "Symbol.IDENTIFIER" should be converted to underscores and one underscore should be prepended, keeping the case unchanged.
    If the kind can not be determined, use `Kind.unknown`.
-  Examples:
-   "a single special 'NaN' value" should give `{"category":Category.normative, "kind":Kind.constant, "name":"NaN"}`
-   "The % ForInIteratorPrototype % object :" should give `{"category":Category.normative, "kind":Kind.constant, "name":"well_known.ForInIteratorPrototype"}`
-   "All ordinary objects have an internal slot called `Prototype`" should give `{"category":Category.normative, "kind":Kind.property_, "name":"Prototype"}`
-   "Constructor Properties of the Global Object / Int32Array ( . . . ): See 23 . 2 . 5 ." should give `{"category":Category.normative, "kind":Kind.property_, "name":"Int32Array"}`
-   "get %TypedArray%.prototype.buffer: % TypedArray % Terminal('.prototype.buffer') is an accessor property ..." should give `{"category":Category.normative, "kind":Kind.property_, "name":"well_known.TypedArray.prototype.buffer"}`
-   "The Function prototype object :" should give `{"category":Category.normative, "kind":Kind.prototype, "name":"Function"}`
-   "Object prototype object :" should give `{"category":Category.normative, "kind":Kind.prototype, "name":"Object"}`
-  
+   Example 1. The spec of the following scheme:
+    "[ The Global Object / Constructor Properties of the Global Object ] PROP_NAME ( . . . ): See XXX."
+    defines a property of GlobalObject and should result in:
+    `{"category":Category.normative, "kind":Kind.property_, "name":"PROP_NAME", "class":"GlobalObject"}`.
+
+   Example 2:
+"""
+[ Text Processing / String Objects / String Iterator Objects / The %StringIteratorPrototype% Object ]
+
+%StringIteratorPrototype% [ %Symbol.toStringTag% ]:
+
+        The initial value of the % Symbol . toStringTag % property is the String value "String Iterator" .
+"""
+   should give:
+    `{"category":Category.normative, "kind":Kind.property_, "name":"_Symbol_toStringTag", "class":"StringIteratorPrototype"}`.
+    
+  * Rules for `Category.informal`:
   If none of the above holds and the spec line does not correspond to any programming concept, the category is "informal".
    `{"category":Category.informal}`
-   Informal clauses do not have a "name". The only allowed kind is `Kind.unknown` or nothing at all.
-  Examples:
-   "Algorithms within this specification manipulate values each of which has an associated type . The possible value types are exactly those defined in this clause ." should give `{"category":Category.informal}`
-   "Well-Known Symbols: Well - known symbols are built - in Symbol values that are explicitly referenced ..." should give `{"category":Category.informal}`
-   "Property Attributes: Attributes are used in this specification ..." should give `{"category":Category.informal}`
-   "Definitions:: The target of an internal method is the object ..." should give `{"category":Category.informal}`
-   "Return value:: The value returned by any internal ..." should give `{"category":Category.informal}`
-   "In addition to those defined in this section ..." should give `{"category":Category.informal}`
-   "Liveness: For some set of objects and / or symbols ..." should give `{"category":Category.informal}`
-   "Execution: At any time , if a set of objects and / or symbols ..." should give `{"category":Category.informal}`
-   "Forward Progress: For an agent to make forward progress ..." should give `{"category":Category.informal}`
-   "There are four types of ECMAScript code :" should give `{"category":Category.informal}`
-   "Comments can be either single or multi - line " should give `{"category":Category.informal}`
-   "Unicode escape sequences are permitted " should give `{"category":Category.informal}`
-   "Nonterminal('IdentifierName') and Nonterminal('ReservedWord') are tokens that are interpreted according" should give `{"category":Category.informal}`
-   "Most ECMAScript functions make an arguments object available to their code" should give `{"category":Category.informal}`
-   "A regular expression literal is an input element that is converted to a RegExp object" should give `{"category":Category.informal}`
-   "A keyword is a token that matches ..." should give `{"category":Category.informal}`
-   "A string literal is 0 or more Unicode code points enclosed in single or double quotes ..." should give `{"category":Category.informal}`
-   "Supplemental Syntax: When processing an instance of the production" should give `{"category":Category.informal}`
-   "An Nonterminal('ArrayLiteral') is an expression describing the initialization of an Array" should give `{"category":Category.informal}`
-   "An object initializer is an expression describing the initialization" should give `{"category":Category.informal}`
-   "The ECMAScript language implicitly performs automatic type conversion as needed" should give `{"category":Category.informal}`
-   "This specification defines several kinds of built - in exotic objects" should give `{"category":Category.informal}`
-   "Object Internal Methods and Internal Slots: The actual semantics of objects ..." should give `{"category":Category.informal}`
-   "Properties are accessed by name , using either the dot notation ..." should give `{"category":Category.informal}`
-   "The Object Type / Object Internal Methods and Internal Slots : The actual semantics of objects , in ECMAScript , are specified via algorithms called internal methods " should give `{"category":Category.informal}`
-   "A new instance of one of the `NativeError` objects below or of the AggregateError object is thrown ..." should give `{"category":Category.informal}`
-   "Normative Optional , Legacy" should give `{"category":Category.informal}`
-   "The result of evaluating a relational operator ..." should give `{"category":Category.informal}`
-   "A tagged template is a function call where the arguments of the call are derived ..." should give `{"category":Category.informal}`
-   "The evaluation of an argument list produces a List of values ." should give `{"category":Category.informal}`
-   "A keyword is a token that matches Nonterminal('IdentifierName') , but also has a syntactic use ;" should give `{"category":Category.informal}`
-   "The result of evaluating a relational operator is always of type Boolean , reflecting whether the relationship named by the operator holds between its two operands ." should give `{"category":Category.informal}`
-   "Each of these objects has the structure described below" should give `{"category":Category.informal}`
+   If the spec looks like an introduction but does not provide any examples, then it is an informal spec.
+   If a name of some entity can not be determined then it is an informal spec.
+   Specs with CONTEXT "Executable Code and Execution Contexts" are informal.
+   Specs with TITLE "Properties of the XXX Constructor" and SPEC "The XXX constructor" are informal.
+   Spec with TITLE "Well-Known Symbols" is informal.
+  Example: "Algorithms within this specification manipulate values each of which has an associated type ." is an informal spec.
+  Example: "Object Internal Methods and Internal Slots" is an informal spec.
+  Example: "Invariants of the Essential Internal Methods" is an informal spec.
+  Example: "[ Abstract Operations ] Type Conversion: The ECMAScript language implicitly performs automatic type conversion as needed ." is an informal spec.
+  Example: "[ Executable Code and Execution Contexts / PrivateEnvironment Records ] PrivateEnvironment Record Operations: The following abstract operations are used in this specification to operate upon PrivateEnvironment Records :" should give `{"category":Category.informal}`.
+  Example: "[ ECMAScript Language: Source Text ] Types of Source Code: There are four types of ECMAScript code :" is an informal spec.
+  Example: "[ ECMAScript Language: Lexical Grammar ] Names and Keywords: ..." is an informal spec.
+  Example: "[ Fundamental Objects / Object Objects ]\nProperties of the Object Constructor:\n\tThe Object constructor :" is an informal spec.
+  Example: "[ Fundamental Objects / Error Objects ]\nProperties of the Error Constructor:\n\tThe Error constructor :" is an informal spec.
+  Example: "[ ECMAScript Data Types and Values / ECMAScript Language Types / The Symbol Type ]\nWell-Known Symbols:\n\tWell - known symbols are built - in Symbol values ..." is an informal spec.
+  Example: "[ ECMAScript Language: Scripts and Modules / Modules / Module Semantics / Synthetic Module Records ] Implementation of Module Record Abstract Methods: The following are the concrete methods for Synthetic Module Record" is an informal spec.
+  Example: "[ Indexed Collections / TypedArray Objects ] Properties of the %TypedArray% Intrinsic Object: The % TypedArray % intrinsic object :" is an informal spec.
+  Return `{"category":Category.informal}` for all the above examples.
  </prompt>
 
  <prompt context="Prototype">
@@ -243,29 +375,29 @@ def function():
   When the spec says "Terminal('XXX')" convert it to `Terminal[{'XXX'}]`.
   When the spec mentions alternative of terminals, like "Terminal('AAA') or Terminal('BBB')" convert it to `Terminal[{'AAA', 'BBB'}]`.
 
-  When the spec says "&lt;constant&gt; 'XXX'" convert it to `Constant[{Constant.XXX}]`.
+  When the spec says "&lt;enum&gt; 'XXX'" convert it to `Enum_[{Enum_.XXX}]`.
    Replace hyphen "-" with underscore "_" in XXX.
-   If XXX is "async", use `Constant.async_`.
-   If XXX is "all", use `Constant.all_`.
-   If XXX is "global", use `Constant.global_`.
-  When the spec mentions alternative of constants, like "&lt;constant&gt; 'AAA' or &lt;constant&gt; 'BBB'" convert it to `Constant[{Constant.AAA, Constant.BBB}]`.
+   If XXX is "async", use `Enum_.async_`.
+   If XXX is "all", use `Enum_.all_`.
+   If XXX is "global", use `Enum_.global_`.
+  When the spec mentions alternative of enums, like "&lt;enum&gt; 'AAA' or &lt;enum&gt; 'BBB'" convert it to `Enum_[{Enum_.AAA, Enum_.BBB}]`.
    Replace hyphen "-" with underscore "_" in AAA and BBB.
-   If AAA or BBB is "async", use `Constant.async_`.
-   If AAA or BBB is "all", use `Constant.all_`.
-   If AAA or BBB is "global", use `Constant.global_`.
-   Example: "&lt;constant&gt; 'sync' or &lt;constant&gt; 'async'" should yield `Constant[{Constant.sync, Constant.async_}]`.
+   If AAA or BBB is "async", use `Enum_.async_`.
+   If AAA or BBB is "all", use `Enum_.all_`.
+   If AAA or BBB is "global", use `Enum_.global_`.
+   Example: "&lt;enum&gt; 'sync' or &lt;enum&gt; 'async'" should yield `Enum_[{Enum_.sync, Enum_.async_}]`.
 
   When the spec mentions an error type, like SyntaxError, TypeError or WHATEVERerror, use the type `Error['WHATEVERError']`. Here 'WHATEVERError' is a string, so put it in quotes.
   Convert the error name to camel case, i.e. "Typeerror" becomes "TypeError".
   If the spec simply says "error" without a specific subtype, use `Error`.
 
   A "completion" is a type `CompletionRecord`. Additional qualifiers possible on a completion are:
-   "normal completion" is `CompletionRecord[Constant[{Constant.normal}]]`
-   "abrupt completion" is `CompletionRecord[Constant[AbruptCompletions]]]`
-   "XXX completion" (except when XXX is "abrupt") is `CompletionRecord[Constant[{Constant.XXX}]]` (Replace hyphen "-" with "_" in XXX. If XXX is "return", use `Constant.return_`. If XXX is "break", use `Constant.break_`. If XXX is "continue", use `Constant.continue_`.)
-   "normal completion containing YYY" is CompletionRecord[Constant[{Constant.normal}], YYY]`
+   "normal completion" is `CompletionRecord[Enum_[{Enum_.normal}]]`
+   "abrupt completion" is `CompletionRecord[Enum_[AbruptCompletions]]]`
+   "XXX completion" (except when XXX is "abrupt") is `CompletionRecord[Enum_[{Enum_.XXX}]]` (Replace hyphen "-" with "_" in XXX. If XXX is "return", use `Enum_.return_`. If XXX is "break", use `Enum_.break_`. If XXX is "continue", use `Enum_.continue_`.)
+   "normal completion containing YYY" is CompletionRecord[Enum_[{Enum_.normal}], YYY]`
   An alternative of `CompletionRecord` types should not be merged and should stay as a union.
-   I.e. "return either a normal completion containing &lt;constant&gt; 'unused' or a throw completion" should give: `CompletionRecord[Constant[{Constant.normal}], Constant[{Constant.unused}]] | CompletionRecord[Constant[{Constant.throw}]]`.
+   I.e. "return either a normal completion containing &lt;enum&gt; 'unused' or a throw completion" should give: `CompletionRecord[Enum_[{Enum_.normal}], Enum_[{Enum_.unused}]] | CompletionRecord[Enum_[{Enum_.throw}]]`.
 
   A "record" type is a class `Record` with additional field specification. Add those fields as a dict in square braces. I.e. when the spec says "Record with fields `AAA` (a TYPE1) and `BBB` (a TYPE2)", use: `Record[{'AAA':TYPE1, 'BBB':Type2}]`
 
@@ -328,14 +460,14 @@ def function():
   Keep the name of the method `Contains` as it is; do not convert to lowercase.
   But when the spec says "EXPR1 contains EXPR2" where the word "contains" is lowercase and not in apostrophes and not preceded by "&lt;method&gt;" qualifier, then render it as `EXPR1 in EXPR1`.
 
-  When the spec uses "&lt;constant&gt; 'SOMETHING'" convert it to `Constant.SOMETHING` (but consider the special cases below). Replace hyphen "-" with underscore "_" in SOMETHING. Also append underscore if SOMETHING is a reserved word.
-   When you see "&lt;constant&gt; 'async'", use `Constant.async_`.
-   When you see "&lt;constant&gt; 'global'", use `Constant.global_`.
-   When you see "&lt;constant&gt; 'all'", use `Constant.all_`.
-   When you see "&lt;constant&gt; 'return'", use `Constant.return_`.
-   When you see "&lt;constant&gt; 'break'", use `Constant.break_`.
-   When you see "&lt;constant&gt; 'continue'", use `Constant.continue_`.
-   But dont append underscore when you see "&lt;constant&gt; 'empty'", use `Constant.empty`.
+  When the spec uses "&lt;enum&gt; 'SOMETHING'" convert it to `Enum_.SOMETHING` (but consider the special cases below). Replace hyphen "-" with underscore "_" in SOMETHING. Also append underscore if SOMETHING is a reserved word.
+   When you see "&lt;enum&gt; 'async'", use `Enum_.async_`.
+   When you see "&lt;enum&gt; 'global'", use `Enum_.global_`.
+   When you see "&lt;enum&gt; 'all'", use `Enum_.all_`.
+   When you see "&lt;enum&gt; 'return'", use `Enum_.return_`.
+   When you see "&lt;enum&gt; 'break'", use `Enum_.break_`.
+   When you see "&lt;enum&gt; 'continue'", use `Enum_.continue_`.
+   But dont append underscore when you see "&lt;enum&gt; 'empty'", use `Enum_.empty`.
 
   Use the following constant mapping:
    "undefined" to `undefined`;
@@ -361,8 +493,8 @@ def function():
   When testing for types, like `Bool`, `String`, `Number`, `BigInt`, `List`, `Set`, `Array`, `Object`, 'Function`  etc. using the construction "VALUE is a TYPE", keep the original type name and do not change it to Python equivalent, i.e. `isinstance(VALUE, TYPE)`.
   When the spec says "list of TYPE", use `List[TYPE]`.
   Whenever the specification line starts with "Assert :" insert `assert CONDITION` where CONDITION is Python code. Interpret the rest of the line after "Assert :" as the condition to check.
-  To check if a VALUE is a "TYPE completion", test if its `Type` attribute is equal to `Constant.TYPE'`.
-  To check if a VALUE is an "abrupt completion", test if its `Type` attribute is not equal to `Constant.normal`.
+  To check if a VALUE is a "TYPE completion", test if its `Type` attribute is equal to `Enum_.TYPE'`.
+  To check if a VALUE is an "abrupt completion", test if its `Type` attribute is not equal to `Enum_.normal`.
   Whenever the specification line starts with "Note : TEXT" insert a comment into generated code (like `# TEXT`) containing the rest of the spec line.
 
   Whenever some "let" or "set" statement contains the token "&lt;return_if_abrupt&gt;", save the result to some temporary variable TEMPVAR (use some unique name like `result_NUM = ...`) and check if the call result is an abrupt completion.
@@ -373,7 +505,7 @@ def function():
     "let `VARIABLE` be &lt;return_if_abrupt&gt; &lt;method&gt; ..." should give:
 ```
 	TEMPVAR = ...
-	if TEMPVAR.Type != Constant.normal:
+	if TEMPVAR.Type != Enum_.normal:
 		return TEMPVAR
 	else:
 		VARIABLE = TEMPVAR.Value
@@ -381,7 +513,7 @@ def function():
    Likewise, "Let `ref` be &lt;return_if_abrupt&gt; &lt;method&gt; `Evaluation` of `constructExpr`" should give:
 ```
 	TEMPVAR = constructExpr.Evaluation()
-	if TEMPVAR.Type != Constant.normal:
+	if TEMPVAR.Type != Enum_.normal:
 		return TEMPVAR
 	else:
 		ref = TEMPVAR.Value
@@ -393,7 +525,7 @@ def function():
    "perform &lt;return_if_abrupt&gt; &lt;method&gt; ..."  should give:
 ```
 	TEMPVAR = ... # perform
-	if TEMPVAR.Type != Constant.normal:
+	if TEMPVAR.Type != Enum_.normal:
 		return TEMPVAR
 ```
 
@@ -423,7 +555,7 @@ def function():
    "let `VARIABLE` be &lt;raise_if_abrupt&gt; &lt;function&gt; `ArrayCreate` ( ... )" should give:
 ```
 	TEMPVAR = ArrayCreate (...)
-	if TEMPVAR.Type != Constant.normal:
+	if TEMPVAR.Type != Enum_.normal:
 		raise RuntimeError("As per spec the function ArrayCreate must return normal completion.")
 	else:
 		VARIABLE = TEMPVAR.Value
@@ -435,7 +567,7 @@ def function():
    "perform &lt;raise_if_abrupt&gt; &lt;function&gt; `InitializeReferencedBinding` ( ... )" should give:
 ```
 	TEMPVAR = InitializeReferencedBinding(...) # perform
-	if TEMPVAR.Type != Constant.normal:
+	if TEMPVAR.Type != Enum_.normal:
 		raise RuntimeError("As per spec the function InitializeReferencedBinding must return normal completion.")
 ```
 
@@ -469,7 +601,7 @@ def function():
   If other rules don't apply, when the specification says "A is B", use `A == B`; when the specification says "A is not B", use `A != B`.
 
   Never return CompletionRecord unless the spec explicitly says "Return Completion Record". ReferenceRecord is not CompletionRecord.
-  Do not return `CompletionRecord(Type=Constant.normal, Value=XXX)`, just return `XXX` instead.
+  Do not return `CompletionRecord(Type=Enum_.normal, Value=XXX)`, just return `XXX` instead.
 
   Remove double square braces, i.e. "[ [ SOMETHING ] ]" becomes `SOMETHING`.
   Replace dot - double square brace expression with attribute lookup, i.e. convert "OBJ . [ [ SOMETHING ] ]" to `OBJ.SOMETHING`.
@@ -564,7 +696,7 @@ def function():
   
   When making the function `CreateArrayIterator` start it like that:
 ```
-def CreateArrayIterator(array: Object, kind: Constant[{Constant.key_value, Constant.key, Constant.value}]) -> Generator:
+def CreateArrayIterator(array: Object, kind: Enum_[{Enum_.key_value, Enum_.key, Enum_.value}]) -> Generator:
 	# No `nonlocal` here.
 	
 	@AbstractClosure
@@ -588,7 +720,7 @@ def CreateArrayIterator(array: Object, kind: Constant[{Constant.key_value, Const
   Change the function name `eval` to `eval_`.
   Change the function name `Map` to `Map_`.
 
-  Never use `mode == Constant.async`. Use `mode == Constant.async_` instead.
+  Never use `mode == Enum_.async`. Use `mode == Enum_.async_` instead.
 
   The subexpression "&lt;method&gt; `ℝ` ( `t` / &lt;function&gt; `msPerDay` )" means `(t / msPerDay()).MV()`.
  </prompt>
@@ -719,7 +851,7 @@ if self.get_subtree(Nonterminal('GeneratorMethod')).HasDirectSuper():
   To check if debugging is enabled, call `is_debug_enabled()`.
   To perform an implementation-defined debugging action, call the function `debug` (like: `result = debug()`) and then return the completion record `Completion(result)`.
 
-  Never return `CompletionRecord(Type=Constant.normal, Value=NotImplemented)`, just return `NotImplemented`.
+  Never return `CompletionRecord(Type=Enum_.normal, Value=NotImplemented)`, just return `NotImplemented`.
  </prompt>
 
  <function name="ParseText">
